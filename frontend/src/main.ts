@@ -32,8 +32,7 @@ class Main {
         // Initialiser le jeu
         await this.game.init();
         
-        // Ajouter le monde
-        this.world.create();
+        // Ajouter le monde (sera créé quand on recevra les données de carte)
         this.game.scene.add(this.world.group);
         
         // Ajouter le joueur
@@ -266,9 +265,32 @@ class Main {
         // Nouveau joueur connecté
         this.networkService.onPlayerJoined((playerData) => {
             console.log('Nouveau joueur:', playerData);
-            this.otherPlayersManager.addPlayer(playerData);
-            if (this.minimap) {
-                this.minimap.updateOtherPlayer(playerData.id, playerData.position, playerData.name);
+            
+            // Si c'est notre propre joueur, mettre à jour la position
+            if (playerData.id === this.player.id || playerData.name === this.networkService['playerName']) {
+                console.log('🔄 Mise à jour de la position du joueur local:', playerData.position);
+                
+                // Mettre à jour l'ID du joueur si ce n'est pas encore fait
+                if (!this.player.id) {
+                    this.player.id = playerData.id;
+                }
+                
+                this.player.group.position.set(
+                    playerData.position.x,
+                    playerData.position.y,
+                    playerData.position.z
+                );
+                this.player.group.rotation.set(
+                    playerData.rotation.x,
+                    playerData.rotation.y,
+                    playerData.rotation.z
+                );
+            } else {
+                // C'est un autre joueur
+                this.otherPlayersManager.addPlayer(playerData);
+                if (this.minimap) {
+                    this.minimap.updateOtherPlayer(playerData.id, playerData.position, playerData.name);
+                }
             }
             
             // Sauvegarder les données de session
@@ -343,6 +365,23 @@ class Main {
         this.networkService.onServerNotification((data) => {
             this.chatManager!.addServerNotification(data.message);
         });
+        
+        // Écouter les données de carte
+        this.networkService.onMapData((mapData) => {
+            console.log('🗺️ Réception des données de carte:', mapData);
+            this.world.receiveMapData(mapData);
+            // Créer la carte maintenant qu'on a les données
+            this.world.create();
+        });
+        
+        // Fallback: si pas de données de carte après 5 secondes, créer une carte locale
+        setTimeout(() => {
+            if (!this.world['isMapLoaded']) {
+                console.log('⚠️ Pas de données de carte reçues, création d\'une carte locale...');
+                this.world['generateLocalMap']();
+                this.world.create();
+            }
+        }, 5000);
     }
     
     gameLoop() {

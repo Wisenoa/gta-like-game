@@ -1,11 +1,140 @@
 import * as THREE from 'three';
 
+export interface MapElement {
+  type: 'building' | 'road' | 'tree' | 'lamp' | 'car';
+  position: { x: number; y: number; z: number };
+  rotation: { x: number; y: number; z: number };
+  scale: { x: number; y: number; z: number };
+  color?: string;
+  metadata?: any;
+}
+
+export interface MapData {
+  elements: MapElement[];
+  seed: number;
+  version: string;
+  generatedAt: string;
+}
+
 export class World {
+    group: THREE.Group;
+    private mapData: MapData | null = null;
+    private isMapLoaded = false;
+    private mapDataCallback?: (data: MapData) => void;
+    
     constructor() {
         this.group = new THREE.Group();
     }
     
-    create() {
+    setMapDataCallback(callback: (data: MapData) => void) {
+        this.mapDataCallback = callback;
+    }
+    
+    receiveMapData(mapData: MapData) {
+        console.log('🗺️ Réception des données de carte du serveur:', mapData);
+        this.mapData = mapData;
+        this.isMapLoaded = true;
+        
+        // Notifier le callback
+        if (this.mapDataCallback) {
+            this.mapDataCallback(mapData);
+        }
+    }
+    
+    async create() {
+        if (!this.isMapLoaded) {
+            console.log('⏳ En attente des données de carte du serveur...');
+            return;
+        }
+        
+        if (this.mapData) {
+            this.createFromServerData();
+        } else {
+            this.createLocalMap();
+        }
+    }
+    
+    private createFromServerData() {
+        if (!this.mapData) return;
+        
+        console.log('🏗️ Construction de la carte depuis les données serveur...');
+        
+        // Créer le sol de base
+        this.createGround();
+        
+        // Créer tous les éléments de la carte
+        this.mapData.elements.forEach((element, index) => {
+            this.createElement(element);
+        });
+        
+        console.log(`✅ Carte construite avec ${this.mapData.elements.length} éléments`);
+    }
+    
+    private createElement(element: MapElement) {
+        let geometry: THREE.BufferGeometry;
+        let material: THREE.Material;
+        
+        switch (element.type) {
+            case 'building':
+                geometry = new THREE.BoxGeometry(element.scale.x, element.scale.y, element.scale.z);
+                material = new THREE.MeshLambertMaterial({ 
+                    color: element.color || '#666666' 
+                });
+                break;
+                
+            case 'road':
+                geometry = new THREE.BoxGeometry(element.scale.x, element.scale.y, element.scale.z);
+                material = new THREE.MeshLambertMaterial({ 
+                    color: element.color || '#333333' 
+                });
+                break;
+                
+            case 'tree':
+                geometry = new THREE.CylinderGeometry(0.3, 0.5, element.scale.y, 8);
+                material = new THREE.MeshLambertMaterial({ 
+                    color: element.color || '#2d5016' 
+                });
+                break;
+                
+            case 'lamp':
+                geometry = new THREE.CylinderGeometry(0.1, 0.1, element.scale.y, 8);
+                material = new THREE.MeshLambertMaterial({ 
+                    color: element.color || '#666666' 
+                });
+                break;
+                
+            case 'car':
+                geometry = new THREE.BoxGeometry(element.scale.x, element.scale.y, element.scale.z);
+                material = new THREE.MeshLambertMaterial({ 
+                    color: element.color || '#ff0000' 
+                });
+                break;
+                
+            default:
+                return; // Type non reconnu
+        }
+        
+        const mesh = new THREE.Mesh(geometry, material);
+        mesh.position.set(element.position.x, element.position.y, element.position.z);
+        mesh.rotation.set(element.rotation.x, element.rotation.y, element.rotation.z);
+        
+        // Ajouter des ombres pour certains éléments
+        if (element.type === 'building' || element.type === 'tree' || element.type === 'lamp') {
+            mesh.castShadow = true;
+        }
+        if (element.type === 'road') {
+            mesh.receiveShadow = true;
+        }
+        
+        this.group.add(mesh);
+    }
+    
+    private generateLocalMap() {
+        console.log('🏗️ Génération de carte locale (fallback)...');
+        this.createLocalMap();
+    }
+    
+    private createLocalMap() {
         this.createGround();
         this.createBuildings();
         this.createStreet();

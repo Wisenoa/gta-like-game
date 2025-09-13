@@ -1,0 +1,74 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Modèle pour la carte du jeu
+model Map {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  seed        Int
+  version     String
+  elements    Json     // Array de MapElement
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  @@map("maps")
+}
+
+// Modèle pour les joueurs
+model Player {
+  id          String   @id @default(uuid())
+  socketId    String?  @unique // Peut être null si déconnecté
+  name        String   @unique // Nom unique pour éviter les doublons
+  position    Json     // {x, y, z}
+  rotation    Json     // {x, y, z}
+  health      Int      @default(100)
+  maxHealth   Int      @default(100)
+  isOnline    Boolean  @default(false)
+  lastSeen    DateTime @default(now())
+  totalPlayTime Int    @default(0) // Temps de jeu total en secondes
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  // Relations
+  sessions    PlayerSession[]
+  
+  @@map("players")
+}
+
+// Modèle pour les sessions de jeu
+model PlayerSession {
+  id          String   @id @default(uuid())
+  playerId    String
+  roomId      String
+  joinedAt    DateTime @default(now())
+  leftAt      DateTime?
+  
+  // Relations
+  player      Player   @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  
+  @@map("player_sessions")
+}
+
+// Modèle pour les rooms/salles de jeu
+model Room {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  maxPlayers  Int      @default(10)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  @@map("rooms")
+}

@@ -18,6 +18,7 @@ export class NetworkService {
     private existingPlayersCallback?: (data: any) => void;
     private chatMessageCallback?: (data: any) => void;
     private serverNotificationCallback?: (data: any) => void;
+    private mapDataCallback?: (data: any) => void;
 
     constructor() {
         this.networkConfig = NetworkConfig.getInstance();
@@ -150,6 +151,16 @@ export class NetworkService {
         this.serverNotificationCallback = callback;
     }
 
+    onMapData(callback) {
+        if (!this.eventListenersSetup) {
+            console.log('🎮 Configuration des écouteurs d\'événements');
+            this.setupGameEventListeners();
+            this.eventListenersSetup = true;
+        }
+        
+        this.mapDataCallback = callback;
+    }
+
     onPlayerJoined(callback) {
         console.log('🎮 Configuration du callback playerJoined');
         if (!this.eventListenersSetup) {
@@ -223,6 +234,11 @@ export class NetworkService {
         this.socket.on('serverNotification', (data) => {
             console.log('📨 Événement serverNotification reçu:', data);
             this.serverNotificationCallback?.(data);
+        });
+        
+        this.socket.on('mapData', (data) => {
+            console.log('📨 Événement mapData reçu:', data);
+            this.mapDataCallback?.(data);
         });
         
         console.log('✅ Écouteurs Socket.io configurés');

@@ -12,6 +12,7 @@ import { Logger } from '@nestjs/common';
 import { PlayerService } from '../players/player.service';
 import { RoomService } from '../rooms/room.service';
 import { JoinRoomDto, PlayerMoveDto, ChatMessageDto } from '../game/dto';
+import { MapService } from '../map/map.service';
 
 @WebSocketGateway({
   cors: {
@@ -35,6 +36,7 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
   constructor(
     private readonly playerService: PlayerService,
     private readonly roomService: RoomService,
+    private readonly mapService: MapService,
   ) {}
 
   handleConnection(client: Socket) {
@@ -58,60 +60,88 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
       // Notifier les autres joueurs de la déconnexion
       this.server.emit('playerDisconnected', player.id);
 
-      // Supprimer le joueur
-      this.playerService.removePlayer(client.id);
+      // Supprimer le joueur (asynchrone)
+      this.playerService.removePlayer(client.id).catch((error) => {
+        this.logger.error(
+          `❌ Erreur lors de la suppression du joueur ${client.id}:`,
+          error,
+        );
+      });
     }
   }
 
   @SubscribeMessage('joinGame')
-  handleJoinGame(
+  async handleJoinGame(
     @MessageBody() joinRoomDto: JoinRoomDto,
     @ConnectedSocket() client: Socket,
   ) {
     this.logger.log(`Joueur ${joinRoomDto.playerName} rejoint le jeu`);
 
-    // Créer le joueur
-    const player = this.playerService.createPlayer(
-      client.id,
-      joinRoomDto.playerName,
-    );
-
-    // Ajouter à la room par défaut
-    const room = this.roomService.getDefaultRoom();
-    if (room) {
-      this.roomService.addPlayerToRoom(room.id, player.id, player);
-
-      // Rejoindre la room Socket.io
-      client.join(room.id);
-
-      // Envoyer les données du joueur au client
-      this.logger.log(`📤 Envoi playerJoined au client ${client.id}:`, player);
-      client.emit('playerJoined', player);
-
-      // Notifier les autres joueurs
-      this.logger.log(
-        `📤 Diffusion playerJoined aux autres joueurs de la room ${room.id}`,
+    try {
+      // Créer le joueur
+      const player = await this.playerService.createPlayer(
+        client.id,
+        joinRoomDto.playerName,
       );
-      client.to(room.id).emit('playerJoined', player);
 
-      // Notification serveur pour la connexion
-      const joinNotification = {
-        type: 'playerJoined',
-        playerName: player.name,
-        message: `${player.name} a rejoint le jeu`,
-        timestamp: new Date().toISOString(),
-      };
-      this.server.emit('serverNotification', joinNotification);
+      // Ajouter à la room par défaut
+      const room = this.roomService.getDefaultRoom();
+      if (room) {
+        this.roomService.addPlayerToRoom(room.id, player.id, player);
 
-      // Envoyer la liste des joueurs existants
-      const existingPlayers = this.roomService
-        .getRoomPlayers(room.id)
-        .filter((p) => p.id !== player.id);
-      this.logger.log(
-        `📤 Envoi existingPlayers au client ${client.id}:`,
-        existingPlayers,
+        // Rejoindre la room Socket.io
+        client.join(room.id);
+
+        // Envoyer les données du joueur au client
+        this.logger.log(
+          `📤 Envoi playerJoined au client ${client.id}:`,
+          player,
+        );
+        client.emit('playerJoined', player);
+
+        // Envoyer la carte au joueur
+        try {
+          const mapData = this.mapService.getMapData();
+          this.logger.log(
+            `🗺️ Envoi de la carte au joueur ${player.name}:`,
+            mapData,
+          );
+          client.emit('mapData', mapData);
+        } catch (error) {
+          this.logger.error(`❌ Erreur lors de l'envoi de la carte:`, error);
+        }
+
+        // Notifier les autres joueurs
+        this.logger.log(
+          `📤 Diffusion playerJoined aux autres joueurs de la room ${room.id}`,
+        );
+        client.to(room.id).emit('playerJoined', player);
+
+        // Notification serveur pour la connexion
+        const joinNotification = {
+          type: 'playerJoined',
+          playerName: player.name,
+          message: `${player.name} a rejoint le jeu`,
+          timestamp: new Date().toISOString(),
+        };
+        this.server.emit('serverNotification', joinNotification);
+
+        // Envoyer la liste des joueurs existants
+        const existingPlayers = this.roomService
+          .getRoomPlayers(room.id)
+          .filter((p) => p.id !== player.id);
+        this.logger.log(
+          `📤 Envoi existingPlayers au client ${client.id}:`,
+          existingPlayers,
+        );
+        client.emit('existingPlayers', existingPlayers);
+      }
+    } catch (error) {
+      this.logger.error(
+        `❌ Erreur lors de la connexion du joueur ${joinRoomDto.playerName}:`,
+        error,
       );
-      client.emit('existingPlayers', existingPlayers);
+      client.emit('joinError', { message: error.message });
     }
   }
 

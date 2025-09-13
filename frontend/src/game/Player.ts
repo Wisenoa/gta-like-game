@@ -2,6 +2,7 @@ import * as THREE from 'three';
 
 export class Player {
     // Propriétés de base
+    id: string | null = null;
     group: THREE.Group;
     camera: THREE.Camera | null;
     inputManager: any;

@@ -1,12 +1,14 @@
 import { Controller, Get, Post, Body, Param } from '@nestjs/common';
 import { RoomService } from '../rooms/room.service';
 import { PlayerService } from '../players/player.service';
+import { MapService } from '../map/map.service';
 
 @Controller('api')
 export class GameController {
   constructor(
     private readonly roomService: RoomService,
     private readonly playerService: PlayerService,
+    private readonly mapService: MapService,
   ) {}
 
   @Get('rooms')
@@ -32,5 +34,15 @@ export class GameController {
       players: this.playerService.getAllPlayers().length,
       rooms: this.roomService.getAllRooms().length,
     };
+  }
+
+  @Get('map')
+  getMap() {
+    return this.mapService.getMapData();
+  }
+
+  @Post('map/regenerate')
+  regenerateMap() {
+    return this.mapService.regenerateMap();
   }
 }
