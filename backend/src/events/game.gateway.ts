@@ -11,7 +11,7 @@ import { Server, Socket } from 'socket.io';
 import { Logger } from '@nestjs/common';
 import { PlayerService } from '../players/player.service';
 import { RoomService } from '../rooms/room.service';
-import { JoinRoomDto, PlayerMoveDto } from '../game/dto';
+import { JoinRoomDto, PlayerMoveDto, ChatMessageDto } from '../game/dto';
 
 @WebSocketGateway({
   cors: {
@@ -46,6 +46,15 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
     const player = this.playerService.getPlayer(client.id);
     if (player) {
+      // Notification serveur pour la déconnexion
+      const disconnectNotification = {
+        type: 'playerDisconnected',
+        playerName: player.name,
+        message: `${player.name} a quitté le jeu`,
+        timestamp: new Date().toISOString(),
+      };
+      this.server.emit('serverNotification', disconnectNotification);
+
       // Notifier les autres joueurs de la déconnexion
       this.server.emit('playerDisconnected', player.id);
 
@@ -85,6 +94,15 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
       );
       client.to(room.id).emit('playerJoined', player);
 
+      // Notification serveur pour la connexion
+      const joinNotification = {
+        type: 'playerJoined',
+        playerName: player.name,
+        message: `${player.name} a rejoint le jeu`,
+        timestamp: new Date().toISOString(),
+      };
+      this.server.emit('serverNotification', joinNotification);
+
       // Envoyer la liste des joueurs existants
       const existingPlayers = this.roomService
         .getRoomPlayers(room.id)
@@ -123,6 +141,29 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
         client.broadcast.emit('playerMoved', moveData);
       }
+    }
+  }
+
+  @SubscribeMessage('chatMessage')
+  handleChatMessage(
+    @MessageBody() chatMessageDto: ChatMessageDto,
+    @ConnectedSocket() client: Socket,
+  ) {
+    const player = this.playerService.getPlayer(client.id);
+    if (player) {
+      const messageData = {
+        playerId: player.id,
+        playerName: player.name,
+        message: chatMessageDto.message,
+        timestamp: new Date().toISOString(),
+      };
+
+      this.logger.log(
+        `💬 Message de ${player.name}: ${chatMessageDto.message}`,
+      );
+
+      // Diffuser le message à tous les joueurs de la room
+      this.server.emit('chatMessage', messageData);
     }
   }
 

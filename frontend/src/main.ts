@@ -7,10 +7,12 @@ import { NetworkService } from './core/NetworkService';
 import { OtherPlayersManager } from './game/OtherPlayersManager';
 import { Minimap } from './game/Minimap';
 import { LoginManager } from './core/LoginManager';
+import { ChatManager } from './core/ChatManager';
 
 class Main {
     private lastNetworkUpdate = 0;
     private networkTickRate = 1000 / 20; // 20 ticks par seconde (50ms)
+    private chatManager: ChatManager | null = null;
     
     constructor() {
         this.game = new Game();
@@ -21,6 +23,7 @@ class Main {
         this.otherPlayersManager = null;
         this.minimap = null;
         this.loginManager = null;
+        this.chatManager = null;
         
         this.init();
     }
@@ -39,6 +42,9 @@ class Main {
         
         // Initialiser le gestionnaire des autres joueurs
         this.otherPlayersManager = new OtherPlayersManager(this.game.scene);
+        
+        // Initialiser le chat
+        this.chatManager = new ChatManager();
         
         // Initialiser la minimap
         try {
@@ -314,6 +320,28 @@ class Main {
         window.addEventListener('blur', () => {
             // Optionnel : déconnecter quand la fenêtre perd le focus
             // this.networkService.disconnect();
+        });
+        
+        // Configurer le chat
+        this.setupChat();
+    }
+    
+    setupChat() {
+        if (!this.chatManager) return;
+        
+        // Configurer l'envoi de messages
+        this.chatManager.setOnSendMessage((message: string) => {
+            this.networkService.sendChatMessage(message);
+        });
+        
+        // Écouter les messages de chat
+        this.networkService.onChatMessage((data) => {
+            this.chatManager!.addMessage(data.playerName, data.message, 'player');
+        });
+        
+        // Écouter les notifications serveur
+        this.networkService.onServerNotification((data) => {
+            this.chatManager!.addServerNotification(data.message);
         });
     }
     

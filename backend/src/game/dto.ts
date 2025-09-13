@@ -1,4 +1,10 @@
-import { IsString, IsNotEmpty, IsNumber, IsObject, ValidateNested } from 'class-validator';
+import {
+  IsString,
+  IsNotEmpty,
+  IsNumber,
+  IsObject,
+  ValidateNested,
+} from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class PlayerPositionDto {
@@ -49,4 +55,14 @@ export class PlayerMoveDto {
 
   @IsNumber()
   speed: number;
+}
+
+export class ChatMessageDto {
+  @IsString()
+  @IsNotEmpty()
+  message: string;
+
+  @IsString()
+  @IsNotEmpty()
+  playerName: string;
 }

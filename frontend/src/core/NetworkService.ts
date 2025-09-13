@@ -16,6 +16,8 @@ export class NetworkService {
     private playerDisconnectedCallback?: (data: any) => void;
     private playerMovedCallback?: (data: any) => void;
     private existingPlayersCallback?: (data: any) => void;
+    private chatMessageCallback?: (data: any) => void;
+    private serverNotificationCallback?: (data: any) => void;
 
     constructor() {
         this.networkConfig = NetworkConfig.getInstance();
@@ -119,6 +121,35 @@ export class NetworkService {
         }
     }
 
+    sendChatMessage(message: string) {
+        if (this.isConnected) {
+            this.socket.emit('chatMessage', {
+                message: message,
+                playerName: this.playerName
+            });
+        }
+    }
+    
+    onChatMessage(callback) {
+        if (!this.eventListenersSetup) {
+            console.log('🎮 Configuration des écouteurs d\'événements');
+            this.setupGameEventListeners();
+            this.eventListenersSetup = true;
+        }
+        
+        this.chatMessageCallback = callback;
+    }
+    
+    onServerNotification(callback) {
+        if (!this.eventListenersSetup) {
+            console.log('🎮 Configuration des écouteurs d\'événements');
+            this.setupGameEventListeners();
+            this.eventListenersSetup = true;
+        }
+        
+        this.serverNotificationCallback = callback;
+    }
+
     onPlayerJoined(callback) {
         console.log('🎮 Configuration du callback playerJoined');
         if (!this.eventListenersSetup) {
@@ -176,13 +207,22 @@ export class NetworkService {
         });
 
         this.socket.on('playerMoved', (data) => {
-            console.log('📨 Événement playerMoved reçu:', data);
             this.playerMovedCallback?.(data);
         });
 
         this.socket.on('existingPlayers', (data) => {
             console.log('📨 Événement existingPlayers reçu:', data);
             this.existingPlayersCallback?.(data);
+        });
+        
+        this.socket.on('chatMessage', (data) => {
+            console.log('📨 Événement chatMessage reçu:', data);
+            this.chatMessageCallback?.(data);
+        });
+        
+        this.socket.on('serverNotification', (data) => {
+            console.log('📨 Événement serverNotification reçu:', data);
+            this.serverNotificationCallback?.(data);
         });
         
         console.log('✅ Écouteurs Socket.io configurés');
