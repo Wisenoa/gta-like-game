@@ -9,6 +9,13 @@ export class NetworkService {
     private networkConfig: NetworkConfig;
     private sessionManager: SessionManager;
     private reconnectTimeout: NodeJS.Timeout | null = null;
+    private eventListenersSetup = false;
+    
+    // Callbacks pour les événements de jeu
+    private playerJoinedCallback?: (data: any) => void;
+    private playerDisconnectedCallback?: (data: any) => void;
+    private playerMovedCallback?: (data: any) => void;
+    private existingPlayersCallback?: (data: any) => void;
 
     constructor() {
         this.networkConfig = NetworkConfig.getInstance();
@@ -81,6 +88,7 @@ export class NetworkService {
             playerName: playerName
         };
         
+        console.log('🎮 Envoi de joinGame:', joinData);
         this.socket.emit('joinGame', joinData);
     }
 
@@ -112,19 +120,72 @@ export class NetworkService {
     }
 
     onPlayerJoined(callback) {
-        this.socket.on('playerJoined', callback);
+        console.log('🎮 Configuration du callback playerJoined');
+        if (!this.eventListenersSetup) {
+            console.log('🎮 Configuration des écouteurs d\'événements');
+            this.setupGameEventListeners();
+            this.eventListenersSetup = true;
+        }
+        
+        // Stocker le callback pour les événements de jeu
+        this.playerJoinedCallback = callback;
+        console.log('✅ Callback playerJoined configuré');
     }
 
     onPlayerDisconnected(callback) {
-        this.socket.on('playerDisconnected', callback);
+        if (!this.eventListenersSetup) {
+            console.log('🎮 Configuration des écouteurs d\'événements');
+            this.setupGameEventListeners();
+            this.eventListenersSetup = true;
+        }
+        
+        this.playerDisconnectedCallback = callback;
     }
 
     onPlayerMoved(callback) {
-        this.socket.on('playerMoved', callback);
+        if (!this.eventListenersSetup) {
+            console.log('🎮 Configuration des écouteurs d\'événements');
+            this.setupGameEventListeners();
+            this.eventListenersSetup = true;
+        }
+        
+        this.playerMovedCallback = callback;
     }
 
     onExistingPlayers(callback) {
-        this.socket.on('existingPlayers', callback);
+        if (!this.eventListenersSetup) {
+            console.log('🎮 Configuration des écouteurs d\'événements');
+            this.setupGameEventListeners();
+            this.eventListenersSetup = true;
+        }
+        
+        this.existingPlayersCallback = callback;
+    }
+    
+    private setupGameEventListeners() {
+        console.log('🔧 Configuration des écouteurs Socket.io...');
+        
+        this.socket.on('playerJoined', (data) => {
+            console.log('📨 Événement playerJoined reçu:', data);
+            this.playerJoinedCallback?.(data);
+        });
+
+        this.socket.on('playerDisconnected', (data) => {
+            console.log('📨 Événement playerDisconnected reçu:', data);
+            this.playerDisconnectedCallback?.(data);
+        });
+
+        this.socket.on('playerMoved', (data) => {
+            console.log('📨 Événement playerMoved reçu:', data);
+            this.playerMovedCallback?.(data);
+        });
+
+        this.socket.on('existingPlayers', (data) => {
+            console.log('📨 Événement existingPlayers reçu:', data);
+            this.existingPlayersCallback?.(data);
+        });
+        
+        console.log('✅ Écouteurs Socket.io configurés');
     }
 
     disconnect() {

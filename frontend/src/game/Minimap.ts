@@ -89,8 +89,13 @@ export class Minimap {
         this.draw();
     }
     
-    public updateOtherPlayer(playerId: string, position: THREE.Vector3, name: string) {
-        this.otherPlayers.set(playerId, { position: position.clone(), name });
+    public updateOtherPlayer(playerId: string, position: any, name: string) {
+        // Convertir l'objet position en THREE.Vector3 si nécessaire
+        const vector3Position = position instanceof THREE.Vector3 ? 
+            position.clone() : 
+            new THREE.Vector3(position.x, position.y, position.z);
+            
+        this.otherPlayers.set(playerId, { position: vector3Position, name });
         this.draw();
     }
     

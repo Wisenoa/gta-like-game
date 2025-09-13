@@ -16,10 +16,12 @@ import { JoinRoomDto, PlayerMoveDto } from '../game/dto';
 @WebSocketGateway({
   cors: {
     origin: [
-      'http://localhost:3000', 
+      'http://localhost:3000',
       'http://localhost:5173',
+      'http://192.168.1.21:3000', // IP locale frontend
+      'http://192.168.1.21:5173', // IP locale frontend (port alternatif)
       /^https:\/\/.*\.ngrok\.io$/,
-      /^https:\/\/.*\.ngrok-free\.app$/
+      /^https:\/\/.*\.ngrok-free\.app$/,
     ],
     credentials: true,
   },
@@ -41,12 +43,12 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
   handleDisconnect(client: Socket) {
     this.logger.log(`Client déconnecté: ${client.id}`);
-    
+
     const player = this.playerService.getPlayer(client.id);
     if (player) {
       // Notifier les autres joueurs de la déconnexion
       this.server.emit('playerDisconnected', player.id);
-      
+
       // Supprimer le joueur
       this.playerService.removePlayer(client.id);
     }
@@ -58,27 +60,39 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
     @ConnectedSocket() client: Socket,
   ) {
     this.logger.log(`Joueur ${joinRoomDto.playerName} rejoint le jeu`);
-    
+
     // Créer le joueur
-    const player = this.playerService.createPlayer(client.id, joinRoomDto.playerName);
-    
+    const player = this.playerService.createPlayer(
+      client.id,
+      joinRoomDto.playerName,
+    );
+
     // Ajouter à la room par défaut
     const room = this.roomService.getDefaultRoom();
     if (room) {
       this.roomService.addPlayerToRoom(room.id, player.id, player);
-      
+
       // Rejoindre la room Socket.io
       client.join(room.id);
-      
+
       // Envoyer les données du joueur au client
+      this.logger.log(`📤 Envoi playerJoined au client ${client.id}:`, player);
       client.emit('playerJoined', player);
-      
+
       // Notifier les autres joueurs
+      this.logger.log(
+        `📤 Diffusion playerJoined aux autres joueurs de la room ${room.id}`,
+      );
       client.to(room.id).emit('playerJoined', player);
-      
+
       // Envoyer la liste des joueurs existants
-      const existingPlayers = this.roomService.getRoomPlayers(room.id)
-        .filter(p => p.id !== player.id);
+      const existingPlayers = this.roomService
+        .getRoomPlayers(room.id)
+        .filter((p) => p.id !== player.id);
+      this.logger.log(
+        `📤 Envoi existingPlayers au client ${client.id}:`,
+        existingPlayers,
+      );
       client.emit('existingPlayers', existingPlayers);
     }
   }
@@ -97,14 +111,18 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
     );
 
     if (player) {
-      // Diffuser le mouvement aux autres joueurs
-      client.broadcast.emit('playerMoved', {
-        playerId: player.id,
-        position: player.position,
-        rotation: player.rotation,
-        isMoving: player.isMoving,
-        speed: player.speed,
-      });
+      // Ne diffuser que si le joueur bouge vraiment (vitesse > 0.5 pour éviter le spam)
+      if (player.isMoving) {
+        const moveData = {
+          playerId: player.id,
+          position: player.position,
+          rotation: player.rotation,
+          isMoving: player.isMoving,
+          speed: player.speed,
+        };
+
+        client.broadcast.emit('playerMoved', moveData);
+      }
     }
   }
 

@@ -9,6 +9,9 @@ import { Minimap } from './game/Minimap';
 import { LoginManager } from './core/LoginManager';
 
 class Main {
+    private lastNetworkUpdate = 0;
+    private networkTickRate = 1000 / 20; // 20 ticks par seconde (50ms)
+    
     constructor() {
         this.game = new Game();
         this.inputManager = new InputManager();
@@ -44,6 +47,36 @@ class Main {
             console.error('Erreur lors de l\'initialisation de la minimap:', error);
             this.minimap = null;
         }
+        
+        // Configurer les événements de mort du joueur
+        this.player.onDeath = () => {
+            this.showDeathScreen();
+        };
+        
+        this.player.onRevive = () => {
+            this.hideDeathScreen();
+        };
+        
+        // Configurer les callbacks pour les joueurs de test
+        this.player.createTestPlayer = () => {
+            const testPosition = {
+                x: this.player.position.x + (Math.random() - 0.5) * 10,
+                y: this.player.position.y,
+                z: this.player.position.z + (Math.random() - 0.5) * 10
+            };
+            
+            const testPlayerId = this.otherPlayersManager.createTestPlayer(
+                `TestPlayer${Math.floor(Math.random() * 1000)}`,
+                testPosition
+            );
+            
+            console.log(`🧪 Joueur de test créé: ${testPlayerId}`);
+        };
+        
+        this.player.clearTestPlayers = () => {
+            this.otherPlayersManager.clearAllPlayers();
+            console.log('🧹 Tous les joueurs de test supprimés');
+        };
         
         // Configurer les événements réseau
         this.setupNetworkEvents();
@@ -139,7 +172,91 @@ class Main {
         }, 3000);
     }
     
+    showDeathScreen() {
+        const deathScreen = document.getElementById('death-screen');
+        const survivalTimeElement = document.getElementById('survival-time');
+        const deathPositionElement = document.getElementById('death-position');
+        
+        if (deathScreen && survivalTimeElement && deathPositionElement) {
+            // Calculer le temps de survie (approximatif)
+            const survivalTime = Math.round((Date.now() - this.game.clock.startTime) / 1000);
+            survivalTimeElement.textContent = survivalTime.toString();
+            
+            // Afficher la position de mort
+            const pos = this.player.position;
+            deathPositionElement.textContent = `${pos.x.toFixed(1)}, ${pos.y.toFixed(1)}, ${pos.z.toFixed(1)}`;
+            
+            // Afficher l'écran de mort
+            deathScreen.style.display = 'flex';
+            
+            // Masquer l'UI normale
+            const ui = document.getElementById('ui');
+            if (ui) {
+                ui.style.display = 'none';
+            }
+            
+            // Configurer les boutons
+            this.setupDeathScreenButtons();
+            
+            // Configurer les contrôles clavier
+            this.setupDeathScreenControls();
+        }
+    }
+    
+    hideDeathScreen() {
+        const deathScreen = document.getElementById('death-screen');
+        const ui = document.getElementById('ui');
+        
+        if (deathScreen) {
+            deathScreen.style.display = 'none';
+        }
+        
+        if (ui) {
+            ui.style.display = 'block';
+        }
+    }
+    
+    setupDeathScreenButtons() {
+        const respawnBtn = document.getElementById('respawn-btn');
+        const spectateBtn = document.getElementById('spectate-btn');
+        
+        if (respawnBtn) {
+            respawnBtn.onclick = () => {
+                this.player.revive();
+            };
+        }
+        
+        if (spectateBtn) {
+            spectateBtn.onclick = () => {
+                // Mode spectateur (pour l'instant, juste ressusciter)
+                this.player.revive();
+            };
+        }
+    }
+    
+    setupDeathScreenControls() {
+        const handleKeyPress = (event: KeyboardEvent) => {
+            if (event.key.toLowerCase() === 'r') {
+                this.player.revive();
+            } else if (event.key.toLowerCase() === 's') {
+                // Mode spectateur (pour l'instant, juste ressusciter)
+                this.player.revive();
+            }
+        };
+        
+        document.addEventListener('keydown', handleKeyPress);
+        
+        // Nettoyer l'événement quand l'écran de mort est fermé
+        const originalHideDeathScreen = this.hideDeathScreen.bind(this);
+        this.hideDeathScreen = () => {
+            document.removeEventListener('keydown', handleKeyPress);
+            originalHideDeathScreen();
+        };
+    }
+    
     setupNetworkEvents() {
+        console.log('🔧 DEBUG: Début de setupNetworkEvents');
+        
         // Nouveau joueur connecté
         this.networkService.onPlayerJoined((playerData) => {
             console.log('Nouveau joueur:', playerData);
@@ -211,13 +328,20 @@ class Main {
             this.minimap.updatePlayerPosition(this.player.position, this.player.rotation);
         }
         
-        // Envoyer la position du joueur au serveur
-        this.networkService.sendPlayerMove(
-            this.player.position,
-            this.player.rotation,
-            this.player.isMoving,
-            this.player.speed
-        );
+        // Envoyer la position du joueur au serveur (avec système de tick)
+        const now = Date.now();
+        if (now - this.lastNetworkUpdate >= this.networkTickRate) {
+            // Ne pas envoyer si le joueur ne bouge pas et n'a pas bougé récemment
+            if (this.player.isMoving || this.player.isWalking || this.player.isSprinting) {
+                this.networkService.sendPlayerMove(
+                    this.player.position,
+                    this.player.rotation,
+                    this.player.isMoving,
+                    this.player.speed
+                );
+                this.lastNetworkUpdate = now;
+            }
+        }
         
         // Mettre à jour l'UI
         this.updateUI();
@@ -266,6 +390,40 @@ class Main {
         const sensitivityElement = document.getElementById('sensitivity');
         if (sensitivityElement) {
             sensitivityElement.textContent = this.player.getMouseSensitivity().toFixed(1);
+        }
+        
+        // Mettre à jour la santé
+        const healthElement = document.getElementById('health');
+        const healthBarElement = document.getElementById('health-bar');
+        if (healthElement && healthBarElement) {
+            const healthPercentage = this.player.getHealthPercentage();
+            healthElement.textContent = Math.round(healthPercentage);
+            
+            // Mettre à jour la barre de vie
+            healthBarElement.style.width = `${healthPercentage}%`;
+            
+            // Changer la couleur selon le niveau de santé
+            if (healthPercentage < 25) {
+                healthBarElement.style.background = 'linear-gradient(90deg, #f44336, #ff5722)'; // Rouge
+                healthElement.style.color = '#f44336';
+            } else if (healthPercentage < 50) {
+                healthBarElement.style.background = 'linear-gradient(90deg, #ff9800, #ffc107)'; // Orange
+                healthElement.style.color = '#ff9800';
+            } else if (healthPercentage < 75) {
+                healthBarElement.style.background = 'linear-gradient(90deg, #ffeb3b, #cddc39)'; // Jaune
+                healthElement.style.color = '#ffeb3b';
+            } else {
+                healthBarElement.style.background = 'linear-gradient(90deg, #4CAF50, #8BC34A)'; // Vert
+                healthElement.style.color = '#4CAF50';
+            }
+            
+            // Effet de clignotement si le joueur est invulnérable
+            if (this.player.isInvulnerable) {
+                healthBarElement.style.opacity = '0.5';
+                setTimeout(() => {
+                    healthBarElement.style.opacity = '1';
+                }, 100);
+            }
         }
     }
 }

@@ -26,6 +26,8 @@ export class Player {
     isGrounded: boolean;
     isSprinting: boolean;
     isWalking: boolean;
+    isMoving: boolean;
+    speed: number;
     
     // Physique
     acceleration: number;
@@ -46,6 +48,15 @@ export class Player {
     staminaDrain: number;
     staminaRegen: number;
     isStaminaDepleted: boolean;
+    
+    // Santé
+    health: number;
+    maxHealth: number;
+    isAlive: boolean;
+    isInvulnerable: boolean;
+    invulnerabilityTime: number;
+    deathTime: number;
+    isDead: boolean;
     
     // Head bobbing
     headBobAmount: number;
@@ -82,6 +93,8 @@ export class Player {
         this.isGrounded = false;
         this.isSprinting = false;
         this.isWalking = false;
+        this.isMoving = false;
+        this.speed = 0;
         
         // Physique réaliste
         this.acceleration = 15;
@@ -102,6 +115,15 @@ export class Player {
         this.staminaDrain = 30; // par seconde
         this.staminaRegen = 20; // par seconde
         this.isStaminaDepleted = false;
+        
+        // Santé du joueur
+        this.health = 100;
+        this.maxHealth = 100;
+        this.isAlive = true;
+        this.isInvulnerable = false;
+        this.invulnerabilityTime = 0;
+        this.deathTime = 0;
+        this.isDead = false;
         
         // Head bobbing
         this.headBobAmount = 0.02;
@@ -129,12 +151,36 @@ export class Player {
     }
     
     update(deltaTime) {
+        // Si le joueur est mort, ne pas mettre à jour le mouvement
+        if (this.isDead) {
+            this.updateHealth(deltaTime);
+            return;
+        }
+        
         this.handleInput(deltaTime);
         this.updatePhysics(deltaTime);
+        this.updateHealth(deltaTime); // Mettre à jour la santé
         this.updateCamera();
     }
     
     handleInput(deltaTime) {
+        // Rotation de la caméra (Call of Duty style)
+        const mouseDelta = this.inputManager.getMouseDelta();
+        
+        // Rotation horizontale (Yaw) - gauche/droite
+        this.yaw -= mouseDelta.x * this.mouseSensitivity;
+        
+        // Rotation verticale (Pitch) - haut/bas
+        this.pitch -= mouseDelta.y * this.mouseSensitivity;
+        
+        // Limiter la rotation verticale pour éviter le retournement
+        this.pitch = Math.max(this.minPitch, Math.min(this.maxPitch, this.pitch));
+        
+        // Appliquer directement les rotations (ordre YXZ pour Call of Duty)
+        if (this.camera) {
+            this.camera.rotation.set(this.pitch, this.yaw, 0, 'YXZ');
+        }
+        
         // Gestion du sprint et de la stamina
         this.handleSprint(deltaTime);
         
@@ -159,6 +205,7 @@ export class Player {
         if (moveVector.length() > 0) {
             moveVector.normalize();
             this.isWalking = true;
+            this.isMoving = true;
             
             // Appliquer la rotation de la caméra au mouvement
             const cameraDirection = new THREE.Vector3();
@@ -196,14 +243,21 @@ export class Player {
             // Interpolation fluide vers la vitesse cible
             this.velocity.lerp(targetVelocity, this.acceleration * deltaTime);
             
+            // Calculer la vitesse actuelle
+            this.speed = Math.sqrt(this.velocity.x * this.velocity.x + this.velocity.z * this.velocity.z);
+            
         } else {
             this.isWalking = false;
             this.isSprinting = false;
+            this.isMoving = false;
             
             // Appliquer la friction
             const friction = this.isGrounded ? this.friction : this.airFriction;
             this.velocity.x *= Math.pow(0.1, friction * deltaTime);
             this.velocity.z *= Math.pow(0.1, friction * deltaTime);
+            
+            // Calculer la vitesse actuelle
+            this.speed = Math.sqrt(this.velocity.x * this.velocity.x + this.velocity.z * this.velocity.z);
         }
         
         // Contrôles de sensibilité (style Call of Duty arcade)
@@ -219,28 +273,33 @@ export class Player {
             this.setMouseSensitivity(1.0);
         }
         
+        // Contrôles de test pour la santé
+        if (this.inputManager.isKeyPressed('KeyH')) {
+            this.heal(10); // Soigner 10 HP
+        }
+        if (this.inputManager.isKeyPressed('KeyJ')) {
+            this.takeDamage(20); // Infliger 20 dégâts
+        }
+        if (this.inputManager.isKeyPressed('KeyK')) {
+            this.revive(); // Ressusciter
+        }
+        
+        // Contrôles de test pour les autres joueurs
+        if (this.inputManager.isKeyPressed('KeyT')) {
+            // Créer un joueur de test
+            this.createTestPlayer?.();
+        }
+        if (this.inputManager.isKeyPressed('KeyY')) {
+            // Supprimer tous les joueurs de test
+            this.clearTestPlayers?.();
+        }
+        
         // Saut amélioré
         if (this.inputManager.isKeyPressed('Space') && this.isGrounded) {
             this.velocity.y = this.jumpForce;
             this.isGrounded = false;
         }
         
-        // Rotation de la caméra (système Call of Duty arcade - ultra réactif)
-        const mouseDelta = this.inputManager.getMouseDelta();
-        
-        // Rotation horizontale (Yaw) - gauche/droite
-        this.yaw -= mouseDelta.x; // Souris droite = rotation négative (tourner à droite)
-        
-        // Rotation verticale (Pitch) - haut/bas
-        this.pitch -= mouseDelta.y; // Souris haut = rotation négative (regarder vers le haut)
-        
-        // Limiter la rotation verticale pour éviter le retournement
-        this.pitch = Math.max(this.minPitch, Math.min(this.maxPitch, this.pitch));
-        
-        // Appliquer directement les rotations (ordre YXZ pour Call of Duty)
-        if (this.camera) {
-            this.camera.rotation.set(this.pitch, this.yaw, 0, 'YXZ');
-        }
     }
     
     handleSprint(deltaTime) {
@@ -336,5 +395,91 @@ export class Player {
     
     getMouseSmoothing() {
         return this.mouseSmoothing;
+    }
+    
+    // Méthodes pour gérer la santé
+    takeDamage(damage: number) {
+        if (this.isInvulnerable || !this.isAlive || this.isDead) return;
+        
+        this.health -= damage;
+        this.health = Math.max(0, this.health);
+        
+        // Déclencher l'invulnérabilité temporaire
+        this.isInvulnerable = true;
+        this.invulnerabilityTime = 1.0; // 1 seconde d'invulnérabilité
+        
+        // Vérifier si le joueur est mort
+        if (this.health <= 0) {
+            this.die();
+        }
+        
+        console.log(`💔 Dégâts reçus: ${damage}, Santé restante: ${this.health}`);
+    }
+    
+    die() {
+        this.isAlive = false;
+        this.isDead = true;
+        this.deathTime = Date.now();
+        
+        // Arrêter le mouvement
+        this.velocity.set(0, 0, 0);
+        this.isWalking = false;
+        this.isSprinting = false;
+        
+        console.log('💀 Joueur mort !');
+        
+        // Déclencher l'événement de mort
+        this.onDeath?.();
+    }
+    
+    onDeath?: () => void; // Callback pour la mort
+    
+    heal(amount: number) {
+        if (!this.isAlive) return;
+        
+        this.health += amount;
+        this.health = Math.min(this.maxHealth, this.health);
+        
+        console.log(`💚 Soins reçus: ${amount}, Santé actuelle: ${this.health}`);
+    }
+    
+    revive() {
+        this.health = this.maxHealth;
+        this.isAlive = true;
+        this.isDead = false;
+        this.isInvulnerable = false;
+        this.invulnerabilityTime = 0;
+        this.deathTime = 0;
+        
+        console.log('🔄 Joueur ressuscité !');
+        
+        // Déclencher l'événement de résurrection
+        this.onRevive?.();
+    }
+    
+    onRevive?: () => void; // Callback pour la résurrection
+    
+    // Callbacks pour les joueurs de test
+    createTestPlayer?: () => void;
+    clearTestPlayers?: () => void;
+    
+    updateHealth(deltaTime: number) {
+        // Gérer l'invulnérabilité temporaire
+        if (this.isInvulnerable) {
+            this.invulnerabilityTime -= deltaTime;
+            if (this.invulnerabilityTime <= 0) {
+                this.isInvulnerable = false;
+            }
+        }
+        
+        // Régénération lente de la santé si en vie et pas de dégâts récents
+        if (this.isAlive && !this.isInvulnerable && this.health < this.maxHealth) {
+            this.health += 5 * deltaTime; // 5 HP par seconde
+            this.health = Math.min(this.maxHealth, this.health);
+        }
+    }
+    
+    getHealthPercentage(): number {
+        return (this.health / this.maxHealth) * 100;
     }
 }

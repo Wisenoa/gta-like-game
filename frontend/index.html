@@ -64,6 +64,97 @@
             color: white;
             font-size: 18px;
         }
+        
+        /* Écran de mort */
+        #death-screen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(135deg, #1a1a1a, #2d2d2d);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 10000;
+            font-family: Arial, sans-serif;
+        }
+        
+        .death-content {
+            text-align: center;
+            color: white;
+            padding: 40px;
+            border-radius: 20px;
+            background: rgba(0, 0, 0, 0.8);
+            border: 2px solid #ff4444;
+            box-shadow: 0 0 50px rgba(255, 68, 68, 0.5);
+            animation: deathPulse 2s ease-in-out infinite;
+        }
+        
+        @keyframes deathPulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+        }
+        
+        .death-title {
+            font-size: 3em;
+            margin: 0 0 20px 0;
+            color: #ff4444;
+            text-shadow: 0 0 20px rgba(255, 68, 68, 0.8);
+            animation: deathGlow 1.5s ease-in-out infinite alternate;
+        }
+        
+        @keyframes deathGlow {
+            from { text-shadow: 0 0 20px rgba(255, 68, 68, 0.8); }
+            to { text-shadow: 0 0 30px rgba(255, 68, 68, 1); }
+        }
+        
+        .death-message {
+            font-size: 1.5em;
+            margin: 0 0 30px 0;
+            color: #cccccc;
+        }
+        
+        .death-stats {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 20px;
+            border-radius: 10px;
+            margin: 20px 0;
+        }
+        
+        .death-stats p {
+            margin: 10px 0;
+            font-size: 1.2em;
+        }
+        
+        .death-options {
+            margin: 30px 0;
+        }
+        
+        .death-button {
+            background: linear-gradient(45deg, #ff4444, #cc0000);
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            margin: 0 10px;
+            border-radius: 10px;
+            font-size: 1.2em;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(255, 68, 68, 0.3);
+        }
+        
+        .death-button:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 6px 20px rgba(255, 68, 68, 0.5);
+        }
+        
+        .death-instruction {
+            font-size: 1em;
+            color: #888;
+            margin-top: 20px;
+            font-style: italic;
+        }
     </style>
 </head>
 <body>
@@ -76,6 +167,25 @@
             <div>Joueurs connectés: <span id="players">1</span></div>
             <div>Stamina: <span id="stamina">100</span>%</div>
             <div>Sensibilité: <span id="sensitivity">1.0</span> (+/- pour ajuster, 0 pour reset)</div>
+            <div>Santé: <span id="health">100</span>%</div>
+            <div id="health-bar-container" style="width: 200px; height: 20px; background: #333; border: 2px solid #666; margin-top: 5px;">
+                <div id="health-bar" style="width: 100%; height: 100%; background: linear-gradient(90deg, #4CAF50, #8BC34A); transition: width 0.3s ease;"></div>
+            </div>
+        </div>
+        <div id="death-screen" style="display: none;">
+            <div class="death-content">
+                <h1 class="death-title">💀 VOUS ÊTES MORT 💀</h1>
+                <p class="death-message">Votre santé a atteint 0 HP</p>
+                <div class="death-stats">
+                    <p>Temps de survie: <span id="survival-time">0</span> secondes</p>
+                    <p>Position finale: <span id="death-position">0, 0, 0</span></p>
+                </div>
+                <div class="death-options">
+                    <button id="respawn-btn" class="death-button">🔄 Ressusciter</button>
+                    <button id="spectate-btn" class="death-button">👁️ Spectateur</button>
+                </div>
+                <p class="death-instruction">Appuyez sur R pour ressusciter ou S pour le mode spectateur</p>
+            </div>
         </div>
         <div id="crosshair"></div>
         <div id="instructions">
@@ -84,6 +194,13 @@
             <div>Espace - Sauter</div>
             <div>Shift - Sprint (consomme stamina)</div>
             <div>Clic - Verrouiller curseur</div>
+            <div>H - Soigner (+10 HP)</div>
+            <div>J - Dégâts (-20 HP)</div>
+            <div>K - Ressusciter</div>
+            <div>R - Ressusciter (écran de mort)</div>
+            <div>S - Mode spectateur (écran de mort)</div>
+            <div>T - Créer joueur de test</div>
+            <div>Y - Supprimer tous les joueurs de test</div>
         </div>
     </div>
     

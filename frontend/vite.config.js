@@ -9,7 +9,19 @@ export default defineConfig({
       'localhost',
       '.ngrok.io',
       '.ngrok-free.app'
-    ]
+    ],
+    proxy: {
+      '/api': {
+        target: 'http://localhost:3002',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api/, '')
+      },
+      '/socket.io': {
+        target: 'http://localhost:3002',
+        changeOrigin: true,
+        ws: true
+      }
+    }
   },
   build: {
     outDir: 'dist',
