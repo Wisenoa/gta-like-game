@@ -58,6 +58,11 @@ class Main {
             this.showDeathScreen();
         };
         
+        // Configurer le mode debug
+        this.inputManager.setDebugCallback(() => {
+            this.world.toggleDebugMode();
+        });
+        
         this.player.onRevive = () => {
             this.hideDeathScreen();
         };
@@ -370,8 +375,7 @@ class Main {
         this.networkService.onMapData((mapData) => {
             console.log('🗺️ Réception des données de carte:', mapData);
             this.world.receiveMapData(mapData);
-            // Créer la carte maintenant qu'on a les données
-            this.world.create();
+            // La carte sera créée automatiquement dans receiveMapData
         });
         
         // Fallback: si pas de données de carte après 5 secondes, créer une carte locale
@@ -427,7 +431,7 @@ class Main {
         // Mettre à jour la position
         const pos = this.game.camera.position;
         document.getElementById('position').textContent = 
-            `${pos.x.toFixed(1)}, ${pos.y.toFixed(1)}, ${pos.z.toFixed(1)}`;
+            `X: ${pos.x.toFixed(1)}, Y: ${pos.y.toFixed(1)}, Z: ${pos.z.toFixed(1)}`;
         
         // Mettre à jour le nombre de joueurs connectés
         const playerCount = this.otherPlayersManager ? 

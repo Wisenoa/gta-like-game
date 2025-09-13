@@ -2,6 +2,7 @@ import { Controller, Get, Post, Body, Param } from '@nestjs/common';
 import { RoomService } from '../rooms/room.service';
 import { PlayerService } from '../players/player.service';
 import { MapService } from '../map/map.service';
+import { GameGateway } from '../events/game.gateway';
 
 @Controller('api')
 export class GameController {
@@ -9,6 +10,7 @@ export class GameController {
     private readonly roomService: RoomService,
     private readonly playerService: PlayerService,
     private readonly mapService: MapService,
+    private readonly gameGateway: GameGateway,
   ) {}
 
   @Get('rooms')
@@ -43,6 +45,9 @@ export class GameController {
 
   @Post('map/regenerate')
   regenerateMap() {
-    return this.mapService.regenerateMap();
+    const result = this.mapService.regenerateMap();
+    // Diffuser la nouvelle carte à tous les joueurs connectés
+    this.gameGateway.broadcastMapData();
+    return result;
   }
 }

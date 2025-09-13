@@ -202,4 +202,15 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
     const players = this.playerService.getAllPlayers();
     client.emit('playersList', players);
   }
+
+  // Méthode pour envoyer la carte à tous les joueurs connectés
+  broadcastMapData() {
+    try {
+      const mapData = this.mapService.getMapData();
+      this.logger.log('🗺️ Diffusion de la nouvelle carte à tous les joueurs connectés');
+      this.server.emit('mapData', mapData);
+    } catch (error) {
+      this.logger.error('❌ Erreur lors de la diffusion de la carte:', error);
+    }
+  }
 }

@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 
 export interface MapElement {
-  type: 'building' | 'road' | 'tree' | 'lamp' | 'car';
+  type: 'building' | 'road' | 'tree' | 'lamp' | 'car' | 'ground';
   position: { x: number; y: number; z: number };
   rotation: { x: number; y: number; z: number };
   scale: { x: number; y: number; z: number };
@@ -20,10 +20,13 @@ export class World {
     group: THREE.Group;
     private mapData: MapData | null = null;
     private isMapLoaded = false;
+    debugMode: boolean = false;
+    debugLabels: THREE.Group = new THREE.Group();
     private mapDataCallback?: (data: MapData) => void;
     
     constructor() {
         this.group = new THREE.Group();
+        this.group.add(this.debugLabels);
     }
     
     setMapDataCallback(callback: (data: MapData) => void) {
@@ -34,6 +37,9 @@ export class World {
         console.log('🗺️ Réception des données de carte du serveur:', mapData);
         this.mapData = mapData;
         this.isMapLoaded = true;
+        
+        // Recharger la carte automatiquement
+        this.create();
         
         // Notifier le callback
         if (this.mapDataCallback) {
@@ -54,15 +60,41 @@ export class World {
         }
     }
     
+    private clearMap() {
+        console.log('🧹 Effacement de l\'ancienne carte...');
+        // Garder seulement les labels de debug et effacer tout le reste
+        const childrenToRemove = [];
+        this.group.children.forEach(child => {
+            if (child !== this.debugLabels) {
+                childrenToRemove.push(child);
+            }
+        });
+        
+        childrenToRemove.forEach(child => {
+            this.group.remove(child);
+            // Libérer la mémoire
+            if (child instanceof THREE.Mesh) {
+                child.geometry.dispose();
+                if (Array.isArray(child.material)) {
+                    child.material.forEach(mat => mat.dispose());
+                } else {
+                    child.material.dispose();
+                }
+            }
+        });
+        
+        console.log(`🗑️ ${childrenToRemove.length} éléments supprimés`);
+    }
+
     private createFromServerData() {
         if (!this.mapData) return;
         
         console.log('🏗️ Construction de la carte depuis les données serveur...');
         
-        // Créer le sol de base
-        this.createGround();
+        // Effacer l'ancienne carte d'abord
+        this.clearMap();
         
-        // Créer tous les éléments de la carte
+        // Créer tous les éléments de la carte (y compris le sol du serveur)
         this.mapData.elements.forEach((element, index) => {
             this.createElement(element);
         });
@@ -77,36 +109,50 @@ export class World {
         switch (element.type) {
             case 'building':
                 geometry = new THREE.BoxGeometry(element.scale.x, element.scale.y, element.scale.z);
-                material = new THREE.MeshLambertMaterial({ 
-                    color: element.color || '#666666' 
+                material = new THREE.MeshPhongMaterial({ 
+                    color: element.color ? parseInt(element.color.replace('#', '0x')) : 0x666666,
+                    shininess: 30
                 });
                 break;
                 
             case 'road':
+                // Utiliser BoxGeometry avec une hauteur très faible pour les routes
                 geometry = new THREE.BoxGeometry(element.scale.x, element.scale.y, element.scale.z);
-                material = new THREE.MeshLambertMaterial({ 
-                    color: element.color || '#333333' 
+                material = new THREE.MeshPhongMaterial({ 
+                    color: element.color ? parseInt(element.color.replace('#', '0x')) : 0x333333,
+                    shininess: 10
                 });
                 break;
                 
             case 'tree':
                 geometry = new THREE.CylinderGeometry(0.3, 0.5, element.scale.y, 8);
-                material = new THREE.MeshLambertMaterial({ 
-                    color: element.color || '#2d5016' 
+                material = new THREE.MeshPhongMaterial({ 
+                    color: element.color ? parseInt(element.color.replace('#', '0x')) : 0x2d5016,
+                    shininess: 5
                 });
                 break;
                 
             case 'lamp':
                 geometry = new THREE.CylinderGeometry(0.1, 0.1, element.scale.y, 8);
-                material = new THREE.MeshLambertMaterial({ 
-                    color: element.color || '#666666' 
+                material = new THREE.MeshPhongMaterial({ 
+                    color: element.color ? parseInt(element.color.replace('#', '0x')) : 0x666666,
+                    shininess: 100
                 });
                 break;
                 
             case 'car':
                 geometry = new THREE.BoxGeometry(element.scale.x, element.scale.y, element.scale.z);
-                material = new THREE.MeshLambertMaterial({ 
-                    color: element.color || '#ff0000' 
+                material = new THREE.MeshPhongMaterial({ 
+                    color: element.color ? parseInt(element.color.replace('#', '0x')) : 0xff0000,
+                    shininess: 80
+                });
+                break;
+                
+            case 'ground':
+                geometry = new THREE.PlaneGeometry(element.scale.x, element.scale.z);
+                material = new THREE.MeshPhongMaterial({ 
+                    color: element.color ? parseInt(element.color.replace('#', '0x')) : 0x8B7355,
+                    shininess: 0
                 });
                 break;
                 
@@ -116,7 +162,16 @@ export class World {
         
         const mesh = new THREE.Mesh(geometry, material);
         mesh.position.set(element.position.x, element.position.y, element.position.z);
-        mesh.rotation.set(element.rotation.x, element.rotation.y, element.rotation.z);
+        
+        // Rotation spéciale pour le ground (plan horizontal)
+        if (element.type === 'ground') {
+            mesh.rotation.x = -Math.PI / 2; // Rotation pour être horizontal
+            mesh.rotation.y = 0;
+            mesh.rotation.z = 0;
+        } else {
+            // Appliquer la rotation normale pour tous les autres éléments
+            mesh.rotation.set(element.rotation.x, element.rotation.y, element.rotation.z);
+        }
         
         // Ajouter des ombres pour certains éléments
         if (element.type === 'building' || element.type === 'tree' || element.type === 'lamp') {
@@ -127,6 +182,86 @@ export class World {
         }
         
         this.group.add(mesh);
+        
+        // Ajouter un label de debug si le mode est activé
+        if (this.debugMode) {
+            this.createDebugLabel(element, mesh);
+        }
+    }
+    
+    // Méthodes pour le mode debug
+    toggleDebugMode() {
+        this.debugMode = !this.debugMode;
+        
+        if (this.debugMode) {
+            console.log('🐛 Mode debug activé - Labels des éléments affichés');
+            this.createAllDebugLabels();
+        } else {
+            console.log('🐛 Mode debug désactivé - Labels masqués');
+            this.clearDebugLabels();
+        }
+    }
+    
+    private createAllDebugLabels() {
+        if (!this.mapData) return;
+        
+        this.mapData.elements.forEach((element, index) => {
+            // Trouver le mesh correspondant dans le groupe
+            const mesh = this.group.children.find(child => 
+                child instanceof THREE.Mesh && 
+                Math.abs(child.position.x - element.position.x) < 0.1 &&
+                Math.abs(child.position.y - element.position.y) < 0.1 &&
+                Math.abs(child.position.z - element.position.z) < 0.1
+            ) as THREE.Mesh;
+            
+            if (mesh) {
+                this.createDebugLabel(element, mesh);
+            }
+        });
+    }
+    
+    private createDebugLabel(element: MapElement, mesh: THREE.Mesh) {
+        const canvas = document.createElement('canvas');
+        const context = canvas.getContext('2d')!;
+        canvas.width = 128;
+        canvas.height = 32;
+        
+        // Style du label
+        context.fillStyle = 'rgba(0, 0, 0, 0.8)';
+        context.fillRect(0, 0, canvas.width, canvas.height);
+        
+        context.fillStyle = 'white';
+        context.font = '12px Arial';
+        context.textAlign = 'center';
+        
+        // Texte du label
+        const subtype = element.metadata?.subtype || element.type;
+        const text = `${subtype}`;
+        context.fillText(text, canvas.width / 2, canvas.height / 2 + 5);
+        
+        // Créer la texture et le sprite
+        const texture = new THREE.CanvasTexture(canvas);
+        const spriteMaterial = new THREE.SpriteMaterial({ map: texture });
+        const sprite = new THREE.Sprite(spriteMaterial);
+        
+        // Positionner le label au-dessus de l'élément
+        sprite.position.set(
+            element.position.x,
+            element.position.y + element.scale.y / 2 + 2,
+            element.position.z
+        );
+        
+        // Redimensionner le sprite (plus petit)
+        sprite.scale.set(1.5, 0.4, 1);
+        
+        // Ajouter des métadonnées pour identifier le label
+        sprite.userData = { elementType: element.type, elementIndex: this.mapData?.elements.indexOf(element) };
+        
+        this.debugLabels.add(sprite);
+    }
+    
+    private clearDebugLabels() {
+        this.debugLabels.clear();
     }
     
     private generateLocalMap() {
@@ -142,20 +277,22 @@ export class World {
     }
     
     createGround() {
-        // Sol principal
+        // Sol principal plus clair
         const groundGeometry = new THREE.PlaneGeometry(200, 200);
-        const groundMaterial = new THREE.MeshLambertMaterial({ 
-            color: 0x4a4a4a 
+        const groundMaterial = new THREE.MeshPhongMaterial({ 
+            color: 0x8B8B8B, // Gris plus clair
+            shininess: 0
         });
         const ground = new THREE.Mesh(groundGeometry, groundMaterial);
         ground.rotation.x = -Math.PI / 2;
         ground.receiveShadow = true;
         this.group.add(ground);
         
-        // Herbe autour
+        // Herbe autour plus claire
         const grassGeometry = new THREE.PlaneGeometry(300, 300);
-        const grassMaterial = new THREE.MeshLambertMaterial({ 
-            color: 0x228B22 
+        const grassMaterial = new THREE.MeshPhongMaterial({ 
+            color: 0x32CD32, // Vert plus clair
+            shininess: 0
         });
         const grass = new THREE.Mesh(grassGeometry, grassMaterial);
         grass.rotation.x = -Math.PI / 2;
@@ -164,57 +301,59 @@ export class World {
     }
     
     createStreet() {
-        // Route principale (plus large)
-        const roadGeometry = new THREE.PlaneGeometry(30, 200);
-        const roadMaterial = new THREE.MeshLambertMaterial({ 
-            color: 0x2C2C2C 
-        });
-        const road = new THREE.Mesh(roadGeometry, roadMaterial);
-        road.rotation.x = -Math.PI / 2;
-        road.position.y = 0.01;
-        this.group.add(road);
+        // Route principale (plus large et plus claire) - DÉSACTIVÉE car générée par le serveur
+        // const roadGeometry = new THREE.PlaneGeometry(30, 200);
+        // const roadMaterial = new THREE.MeshPhongMaterial({ 
+        //     color: 0x404040, // Gris plus clair
+        //     shininess: 10
+        // });
+        // const road = new THREE.Mesh(roadGeometry, roadMaterial);
+        // road.rotation.x = -Math.PI / 2;
+        // road.position.y = 0.01;
+        // road.receiveShadow = true;
+        // this.group.add(road);
         
         // Trottoirs
         this.createSidewalks();
         
-        // Lignes blanches centrales (continues)
-        for (let i = -90; i <= 90; i += 2) {
-            const lineGeometry = new THREE.PlaneGeometry(0.3, 1.5);
-            const lineMaterial = new THREE.MeshBasicMaterial({ 
-                color: 0xFFFFFF 
-            });
-            const line = new THREE.Mesh(lineGeometry, lineMaterial);
-            line.rotation.x = -Math.PI / 2;
-            line.position.set(0, 0.02, i);
-            this.group.add(line);
-        }
+        // Lignes blanches centrales (continues) - DÉSACTIVÉES car générées par le serveur
+        // for (let i = -90; i <= 90; i += 2) {
+        //     const lineGeometry = new THREE.PlaneGeometry(0.3, 1.5);
+        //     const lineMaterial = new THREE.MeshBasicMaterial({ 
+        //         color: 0xFFFFFF 
+        //     });
+        //     const line = new THREE.Mesh(lineGeometry, lineMaterial);
+        //     line.rotation.x = -Math.PI / 2;
+        //     line.position.set(0, 0.02, i);
+        //     this.group.add(line);
+        // }
         
-        // Lignes de bordure (discontinues)
-        for (let i = -90; i <= 90; i += 8) {
-            // Bordure droite
-            for (let j = 0; j < 4; j++) {
-                const lineGeometry = new THREE.PlaneGeometry(0.2, 1);
-                const lineMaterial = new THREE.MeshBasicMaterial({ 
-                    color: 0xFFFFFF 
-                });
-                const line = new THREE.Mesh(lineGeometry, lineMaterial);
-                line.rotation.x = -Math.PI / 2;
-                line.position.set(12, 0.02, i + j * 2);
-                this.group.add(line);
-            }
-            
-            // Bordure gauche
-            for (let j = 0; j < 4; j++) {
-                const lineGeometry = new THREE.PlaneGeometry(0.2, 1);
-                const lineMaterial = new THREE.MeshBasicMaterial({ 
-                    color: 0xFFFFFF 
-            });
-                const line = new THREE.Mesh(lineGeometry, lineMaterial);
-                line.rotation.x = -Math.PI / 2;
-                line.position.set(-12, 0.02, i + j * 2);
-                this.group.add(line);
-            }
-        }
+        // Lignes de bordure (discontinues) - DÉSACTIVÉES car générées par le serveur
+        // for (let i = -90; i <= 90; i += 8) {
+        //     // Bordure droite
+        //     for (let j = 0; j < 4; j++) {
+        //         const lineGeometry = new THREE.PlaneGeometry(0.2, 1);
+        //         const lineMaterial = new THREE.MeshBasicMaterial({ 
+        //             color: 0xFFFFFF 
+        //         });
+        //         const line = new THREE.Mesh(lineGeometry, lineMaterial);
+        //         line.rotation.x = -Math.PI / 2;
+        //         line.position.set(12, 0.02, i + j * 2);
+        //         this.group.add(line);
+        //     }
+        //     
+        //     // Bordure gauche
+        //     for (let j = 0; j < 4; j++) {
+        //         const lineGeometry = new THREE.PlaneGeometry(0.2, 1);
+        //         const lineMaterial = new THREE.MeshBasicMaterial({ 
+        //             color: 0xFFFFFF 
+        //         });
+        //         const line = new THREE.Mesh(lineGeometry, lineMaterial);
+        //         line.rotation.x = -Math.PI / 2;
+        //         line.position.set(-12, 0.02, i + j * 2);
+        //         this.group.add(line);
+        //     }
+        // }
         
         // Feux de circulation
         this.createTrafficLights();
@@ -227,17 +366,18 @@ export class World {
     }
     
     createSidewalks() {
-        // Trottoir droit
+        // Trottoir droit plus clair
         const sidewalkGeometry = new THREE.PlaneGeometry(8, 200);
-        const sidewalkMaterial = new THREE.MeshLambertMaterial({ 
-            color: 0x8B7355 
+        const sidewalkMaterial = new THREE.MeshPhongMaterial({ 
+            color: 0xA0A0A0, // Gris plus clair
+            shininess: 5
         });
         const rightSidewalk = new THREE.Mesh(sidewalkGeometry, sidewalkMaterial);
         rightSidewalk.rotation.x = -Math.PI / 2;
         rightSidewalk.position.set(19, 0.005, 0);
         this.group.add(rightSidewalk);
         
-        // Trottoir gauche
+        // Trottoir gauche plus clair
         const leftSidewalk = new THREE.Mesh(sidewalkGeometry, sidewalkMaterial);
         leftSidewalk.rotation.x = -Math.PI / 2;
         leftSidewalk.position.set(-19, 0.005, 0);

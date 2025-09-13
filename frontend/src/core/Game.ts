@@ -43,12 +43,12 @@ export class Game {
     }
     
     setupLighting() {
-        // Lumière ambiante
-        const ambientLight = new THREE.AmbientLight(0x404040, 0.6);
+        // Lumière ambiante plus forte
+        const ambientLight = new THREE.AmbientLight(0x404040, 1.2);
         this.scene.add(ambientLight);
         
-        // Lumière directionnelle (soleil)
-        const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
+        // Lumière directionnelle (soleil) plus forte
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 1.5);
         directionalLight.position.set(50, 50, 50);
         directionalLight.castShadow = true;
         directionalLight.shadow.mapSize.width = 2048;
@@ -60,6 +60,17 @@ export class Game {
         directionalLight.shadow.camera.top = 100;
         directionalLight.shadow.camera.bottom = -100;
         this.scene.add(directionalLight);
+        
+        // Lumière supplémentaire pour éclairer le sol
+        const groundLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        groundLight.position.set(0, 30, 0);
+        groundLight.target.position.set(0, 0, 0);
+        this.scene.add(groundLight);
+        this.scene.add(groundLight.target);
+        
+        // Lumière hémisphérique pour un éclairage plus naturel
+        const hemisphereLight = new THREE.HemisphereLight(0x87CEEB, 0x8B4513, 0.6);
+        this.scene.add(hemisphereLight);
     }
     
     onWindowResize() {

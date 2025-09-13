@@ -13,6 +13,9 @@ export class InputManager {
         this.mouseSensitivity = 0.003; // Sensibilité élevée pour réactivité maximale
         this.invertY = false; // Contrôle naturel
         
+        // Callback pour le mode debug
+        this.debugCallback = null;
+        
         this.setupEventListeners();
     }
     
@@ -20,6 +23,14 @@ export class InputManager {
         // Clavier
         document.addEventListener('keydown', (event) => {
             this.keys[event.code] = true;
+            
+            // Gestion de la touche de debug (P)
+            if (event.code === 'KeyP') {
+                event.preventDefault();
+                if (this.debugCallback) {
+                    this.debugCallback();
+                }
+            }
             
             // Empêcher les comportements par défaut pour certaines touches
             if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(event.code)) {
@@ -102,5 +113,9 @@ export class InputManager {
         if (this.mouse.isLocked) {
             document.exitPointerLock();
         }
+    }
+    
+    setDebugCallback(callback) {
+        this.debugCallback = callback;
     }
 }
