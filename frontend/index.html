@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GTA-Like Game</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background: #000;
+            font-family: Arial, sans-serif;
+            overflow: hidden;
+        }
+        
+        #gameContainer {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+        }
+        
+        #ui {
+            position: absolute;
+            top: 0;
+            left: 0;
+            z-index: 100;
+            color: white;
+            padding: 20px;
+            pointer-events: none;
+        }
+        
+        #crosshair {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 20px;
+            height: 20px;
+            border: 2px solid white;
+            border-radius: 50%;
+            pointer-events: none;
+        }
+        
+        #instructions {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            color: white;
+            font-size: 14px;
+            opacity: 0.8;
+        }
+        
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-5px); }
+            75% { transform: translateX(5px); }
+        }
+        
+        #loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: white;
+            font-size: 18px;
+        }
+    </style>
+</head>
+<body>
+    <div id="gameContainer">
+        <div id="loading">Chargement du jeu...</div>
+        <div id="ui" style="display: none;">
+            <h2>GTA-Like Game</h2>
+            <div>FPS: <span id="fps">0</span></div>
+            <div>Position: <span id="position">0, 0, 0</span></div>
+            <div>Joueurs connectés: <span id="players">1</span></div>
+            <div>Stamina: <span id="stamina">100</span>%</div>
+            <div>Sensibilité: <span id="sensitivity">1.0</span> (+/- pour ajuster, 0 pour reset)</div>
+        </div>
+        <div id="crosshair"></div>
+        <div id="instructions">
+            <div>WASD - Se déplacer</div>
+            <div>Souris - Regarder autour</div>
+            <div>Espace - Sauter</div>
+            <div>Shift - Sprint (consomme stamina)</div>
+            <div>Clic - Verrouiller curseur</div>
+        </div>
+    </div>
+    
+    <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
