@@ -53,16 +53,159 @@
 			// Classe WorldGenerator intégrée directement
 			class WorldGenerator {
 				constructor() {
-					this.WORLD_SIZE = 30; // 30x30 blocs (agrandi progressivement)
+					this.CHUNK_SIZE = 16; // Chunks de 16x16 blocs
+					this.RENDER_DISTANCE = 1; // Nombre de chunks à charger autour du joueur (3x3 = 9 chunks)
 					this.BLOCK_SIZE = 1;
 					this.BLOCK_HEIGHT = 1;
 					this.MAX_HEIGHT = 3; // Hauteur maximale pour tester le culling
 					
+					// Détecter Apple Silicon pour optimisations spécifiques
+					this.isAppleSilicon = this.detectAppleSilicon();
+					
+                    this.BATCH_SIZE = 4; // Batch normal
+					
+					
 					// Géométrie simple et efficace
 					this.blockGeometry = new THREE.BoxGeometry(this.BLOCK_SIZE, this.BLOCK_HEIGHT, this.BLOCK_SIZE);
 					
-					// Matériau partagé pour tous les blocs
-					this.blockMaterial = new THREE.MeshLambertMaterial({ color: 0x8B4513 }); // Couleur terre
+					// Système de texture atlas optimisé
+					this.textureAtlas = this.createTextureAtlas();
+					this.blockMaterial = new THREE.MeshLambertMaterial({ 
+						map: this.textureAtlas,
+						transparent: false
+					});
+					
+					// Types de blocs avec leurs coordonnées dans l'atlas
+					this.blockTypes = {
+						DIRT: { u: 0, v: 0 },      // Coin supérieur gauche
+						STONE: { u: 0.5, v: 0 },   // Coin supérieur droit
+						GRASS: { u: 0, v: 0.5 },   // Coin inférieur gauche
+						SAND: { u: 0.5, v: 0.5 }   // Coin inférieur droit
+					};
+					
+					// Système de chunks
+					this.loadedChunks = new Map(); // Map des chunks chargés
+					this.chunkGroups = new Map(); // Map des groupes de chunks
+					this.needsOctreeUpdate = false; // Flag pour optimiser la reconstruction de l'Octree
+				}
+
+				/**
+				 * Détecte si on est sur Apple Silicon
+				 * @returns {boolean} True si Apple Silicon détecté
+				 */
+				detectAppleSilicon() {
+					// Détecter Apple Silicon via User Agent
+					const userAgent = navigator.userAgent;
+					const isMac = userAgent.includes('Mac');
+					const isAppleSilicon = userAgent.includes('Apple') || 
+						(userAgent.includes('Mac') && !userAgent.includes('Intel'));
+					
+					// Détecter via les capacités WebGL
+					const canvas = document.createElement('canvas');
+					const gl = canvas.getContext('webgl2') || canvas.getContext('webgl');
+					if (gl) {
+						const renderer = gl.getParameter(gl.RENDERER);
+						const vendor = gl.getParameter(gl.VENDOR);
+						
+						// Apple Silicon utilise souvent "Apple GPU" comme renderer
+						if (renderer && renderer.includes('Apple')) {
+							return true;
+						}
+					}
+					
+					return isMac && isAppleSilicon;
+				}
+
+				/**
+				 * Crée un atlas de textures pour tous les types de blocs
+				 * @returns {THREE.Texture} Atlas de textures
+				 */
+				createTextureAtlas() {
+					// Créer un canvas pour l'atlas
+					const canvas = document.createElement('canvas');
+					canvas.width = 128;
+					canvas.height = 128;
+					const ctx = canvas.getContext('2d');
+					
+					// Couleurs pour chaque type de bloc
+					const textures = {
+						DIRT: '#8B4513',    // Brun terre
+						STONE: '#696969',    // Gris pierre
+						GRASS: '#228B22',    // Vert herbe
+						SAND: '#F4A460'      // Beige sable
+					};
+					
+					// Dessiner chaque texture dans l'atlas
+					const tileSize = 64;
+					
+					// Terre (coin supérieur gauche)
+					ctx.fillStyle = textures.DIRT;
+					ctx.fillRect(0, 0, tileSize, tileSize);
+					
+					// Pierre (coin supérieur droit)
+					ctx.fillStyle = textures.STONE;
+					ctx.fillRect(tileSize, 0, tileSize, tileSize);
+					
+					// Herbe (coin inférieur gauche)
+					ctx.fillStyle = textures.GRASS;
+					ctx.fillRect(0, tileSize, tileSize, tileSize);
+					
+					// Sable (coin inférieur droit)
+					ctx.fillStyle = textures.SAND;
+					ctx.fillRect(tileSize, tileSize, tileSize, tileSize);
+					
+					// Ajouter des détails pour rendre les textures plus intéressantes
+					this.addTextureDetails(ctx, tileSize);
+					
+					// Créer la texture Three.js
+					const texture = new THREE.CanvasTexture(canvas);
+					texture.magFilter = THREE.NearestFilter;
+					texture.minFilter = THREE.NearestFilter;
+					texture.wrapS = THREE.ClampToEdgeWrapping;
+					texture.wrapT = THREE.ClampToEdgeWrapping;
+					
+					return texture;
+				}
+
+				/**
+				 * Ajoute des détails aux textures pour les rendre plus réalistes
+				 */
+				addTextureDetails(ctx, tileSize) {
+					ctx.save();
+					
+					// Détails pour la terre
+					ctx.fillStyle = '#654321';
+					for (let i = 0; i < 10; i++) {
+						const x = Math.random() * tileSize;
+						const y = Math.random() * tileSize;
+						ctx.fillRect(x, y, 2, 2);
+					}
+					
+					// Détails pour la pierre
+					ctx.fillStyle = '#808080';
+					for (let i = 0; i < 15; i++) {
+						const x = tileSize + Math.random() * tileSize;
+						const y = Math.random() * tileSize;
+						ctx.fillRect(x, y, 1, 3);
+					}
+					
+					// Détails pour l'herbe
+					ctx.fillStyle = '#32CD32';
+					for (let i = 0; i < 8; i++) {
+						const x = Math.random() * tileSize;
+						const y = tileSize + Math.random() * tileSize;
+						ctx.fillRect(x, y, 1, 2);
+					}
+					
+					// Détails pour le sable
+					ctx.fillStyle = '#DEB887';
+					for (let i = 0; i < 20; i++) {
+						const x = tileSize + Math.random() * tileSize;
+						const y = tileSize + Math.random() * tileSize;
+						ctx.fillRect(x, y, 1, 1);
+					}
+					
+					ctx.restore();
 				}
 
 				/**
@@ -72,29 +215,122 @@
 				 * @returns {THREE.Group} Le groupe contenant tous les blocs
 				 */
 				createMinecraftWorld(scene, worldOctree) {
-					const worldGroup = new THREE.Group();
+					this.scene = scene;
+					this.worldOctree = worldOctree;
 					
-					// Créer une map 2D pour détecter les voisins
-					const blockMap = new Array(this.WORLD_SIZE).fill(null).map(() => new Array(this.WORLD_SIZE).fill(null).map(() => new Array(this.MAX_HEIGHT).fill(false)));
+					// Créer le groupe principal pour tous les chunks
+					this.worldGroup = new THREE.Group();
+					scene.add(this.worldGroup);
 					
-					// Marquer tous les blocs comme présents
-					for (let x = 0; x < this.WORLD_SIZE; x++) {
-						for (let z = 0; z < this.WORLD_SIZE; z++) {
-							const height = this.getBlockHeight(x, z);
+					// Charger les chunks initiaux autour de l'origine
+					this.updateChunks(0, 0);
+					
+					// Attendre un peu pour que les chunks se chargent, puis reconstruire l'Octree
+					setTimeout(() => {
+						this.needsOctreeUpdate = true;
+						this.updateOctreeIfNeeded();
+						console.log('Octree initial reconstruit après chargement des chunks');
+					}, 100);
+					
+					console.log(`Système de chunking initialisé (chunks ${this.CHUNK_SIZE}x${this.CHUNK_SIZE})`);
+					
+					return this.worldGroup;
+				}
+
+				/**
+				 * Met à jour les chunks selon la position du joueur
+				 * @param {number} playerX - Position X du joueur
+				 * @param {number} playerZ - Position Z du joueur
+				 */
+				updateChunks(playerX, playerZ) {
+					const chunkX = Math.floor(playerX / this.CHUNK_SIZE);
+					const chunkZ = Math.floor(playerZ / this.CHUNK_SIZE);
+					
+					// Vérifier si on a besoin de mettre à jour (optimisation)
+					if (this.lastChunkX === chunkX && this.lastChunkZ === chunkZ) {
+						return; // Pas de changement, pas besoin de mettre à jour
+					}
+					
+					// Vérifier si on a vraiment changé de chunk (pas juste bougé dans le même chunk)
+					// Mais permettre le chargement initial si lastChunkX/Z sont undefined
+					const chunkChanged = this.lastChunkX === undefined || this.lastChunkZ === undefined ||
+						Math.abs(chunkX - this.lastChunkX) > 0 || Math.abs(chunkZ - this.lastChunkZ) > 0;
+					if (!chunkChanged) {
+						return;
+					}
+					
+					this.lastChunkX = chunkX;
+					this.lastChunkZ = chunkZ;
+					
+					console.log(`Mise à jour des chunks: joueur en chunk (${chunkX}, ${chunkZ})`);
+					
+					// Décharger les chunks trop éloignés
+					this.unloadDistantChunks(chunkX, chunkZ);
+					
+					// Charger les chunks nécessaires
+					for (let x = chunkX - this.RENDER_DISTANCE; x <= chunkX + this.RENDER_DISTANCE; x++) {
+						for (let z = chunkZ - this.RENDER_DISTANCE; z <= chunkZ + this.RENDER_DISTANCE; z++) {
+							const chunkKey = `${x},${z}`;
+							if (!this.loadedChunks.has(chunkKey)) {
+								this.loadChunk(x, z);
+							}
+						}
+					}
+				}
+
+				/**
+				 * Charge un chunk spécifique de manière asynchrone pour éviter le lag
+				 * @param {number} chunkX - Position X du chunk
+				 * @param {number} chunkZ - Position Z du chunk
+				 */
+				loadChunk(chunkX, chunkZ) {
+					const chunkKey = `${chunkX},${chunkZ}`;
+					
+					// Créer le groupe pour ce chunk
+					const chunkGroup = new THREE.Group();
+					
+					// Créer une map 2D pour détecter les voisins dans ce chunk
+					const blockMap = new Array(this.CHUNK_SIZE).fill(null).map(() => new Array(this.CHUNK_SIZE).fill(null).map(() => new Array(this.MAX_HEIGHT).fill(false)));
+					
+					// Marquer tous les blocs comme présents dans ce chunk
+					for (let x = 0; x < this.CHUNK_SIZE; x++) {
+						for (let z = 0; z < this.CHUNK_SIZE; z++) {
+							const worldX = chunkX * this.CHUNK_SIZE + x;
+							const worldZ = chunkZ * this.CHUNK_SIZE + z;
+							const height = this.getBlockHeight(worldX, worldZ);
+							
 							for (let y = 0; y < height; y++) {
 								blockMap[x][z][y] = true;
 							}
 						}
 					}
 					
-					// Créer des meshes individuels avec culling des faces cachées
-					for (let x = 0; x < this.WORLD_SIZE; x++) {
-						for (let z = 0; z < this.WORLD_SIZE; z++) {
-							const height = this.getBlockHeight(x, z);
+					// Charger les blocs par petits groupes pour éviter le lag
+					this.loadChunkBlocksAsync(chunkGroup, chunkX, chunkZ, blockMap, chunkKey);
+				}
+
+				/**
+				 * Charge les blocs d'un chunk de manière asynchrone
+				 */
+				loadChunkBlocksAsync(chunkGroup, chunkX, chunkZ, blockMap, chunkKey) {
+					let blockIndex = 0;
+					const totalBlocks = this.CHUNK_SIZE * this.CHUNK_SIZE;
+					
+					const loadNextBatch = () => {
+						const batchSize = this.BATCH_SIZE; // Utiliser le batch size adaptatif
+						let blocksLoaded = 0;
+						
+						while (blockIndex < totalBlocks && blocksLoaded < batchSize) {
+							const x = Math.floor(blockIndex / this.CHUNK_SIZE);
+							const z = blockIndex % this.CHUNK_SIZE;
+							
+							const worldX = chunkX * this.CHUNK_SIZE + x;
+							const worldZ = chunkZ * this.CHUNK_SIZE + z;
+							const height = this.getBlockHeight(worldX, worldZ);
 							
 							for (let y = 0; y < height; y++) {
-								const blockX = (x - this.WORLD_SIZE / 2) * this.BLOCK_SIZE;
-								const blockZ = (z - this.WORLD_SIZE / 2) * this.BLOCK_SIZE;
+								const blockX = (worldX - 8) * this.BLOCK_SIZE;
+								const blockZ = (worldZ - 8) * this.BLOCK_SIZE;
 								const blockY = y * this.BLOCK_HEIGHT;
 								
 								// Créer une géométrie optimisée pour ce bloc
@@ -106,24 +342,89 @@
 								blockMesh.castShadow = false;
 								blockMesh.receiveShadow = false;
 								
-								// Ajouter le bloc au groupe
-								worldGroup.add(blockMesh);
+								// Ajouter le bloc au chunk
+								chunkGroup.add(blockMesh);
 							}
+							
+							blockIndex++;
+							blocksLoaded++;
+						}
+						
+						if (blockIndex < totalBlocks) {
+							// Continuer le chargement au prochain frame
+							requestAnimationFrame(loadNextBatch);
+						} else {
+							// Chunk complètement chargé
+							this.finishChunkLoading(chunkGroup, chunkKey);
+						}
+					};
+					
+					// Commencer le chargement
+					loadNextBatch();
+				}
+
+				/**
+				 * Finalise le chargement d'un chunk
+				 */
+				finishChunkLoading(chunkGroup, chunkKey) {
+					// Ajouter le chunk à la scène
+					this.worldGroup.add(chunkGroup);
+					
+					// Marquer le chunk comme chargé
+					this.loadedChunks.set(chunkKey, true);
+					this.chunkGroups.set(chunkKey, chunkGroup);
+					
+					// Ne pas reconstruire l'Octree immédiatement - le faire en batch
+					this.needsOctreeUpdate = true;
+					
+					console.log(`Chunk chargé: ${chunkKey} (${chunkGroup.children.length} blocs)`);
+				}
+
+				/**
+				 * Décharge les chunks trop éloignés
+				 * @param {number} centerChunkX - Position X du chunk central
+				 * @param {number} centerChunkZ - Position Z du chunk central
+				 */
+				unloadDistantChunks(centerChunkX, centerChunkZ) {
+					const chunksToUnload = [];
+					
+					for (const [chunkKey, chunkGroup] of this.chunkGroups) {
+						const [chunkX, chunkZ] = chunkKey.split(',').map(Number);
+						const distance = Math.max(Math.abs(chunkX - centerChunkX), Math.abs(chunkZ - centerChunkZ));
+						
+						if (distance > this.RENDER_DISTANCE) {
+							chunksToUnload.push(chunkKey);
 						}
 					}
 					
-					// Ajouter le monde à la scène
-					scene.add(worldGroup);
-					
-					// Construire l'Octree à partir du monde de blocs
-					worldOctree.fromGraphNode(worldGroup);
-					
-					const totalBlocks = worldGroup.children.length;
-					console.log(`Monde Minecraft créé avec ${totalBlocks} blocs (avec culling des faces cachées)`);
-					
-					return worldGroup;
+					// Décharger les chunks éloignés
+					if (chunksToUnload.length > 0) {
+						console.log(`Déchargement de ${chunksToUnload.length} chunks éloignés`);
+						
+						chunksToUnload.forEach(chunkKey => {
+							const chunkGroup = this.chunkGroups.get(chunkKey);
+							this.worldGroup.remove(chunkGroup);
+							this.loadedChunks.delete(chunkKey);
+							this.chunkGroups.delete(chunkKey);
+							console.log(`Chunk déchargé: ${chunkKey}`);
+						});
+						
+						// Marquer que l'Octree doit être mis à jour
+						this.needsOctreeUpdate = true;
+					}
 				}
 
+				/**
+				 * Met à jour l'Octree de manière optimisée (seulement si nécessaire)
+				 */
+				updateOctreeIfNeeded() {
+					if (this.needsOctreeUpdate) {
+						// Reconstruire l'Octree seulement si nécessaire
+						this.worldOctree.fromGraphNode(this.worldGroup);
+						this.needsOctreeUpdate = false;
+						console.log('Octree mis à jour');
+					}
+				}
 
 				/**
 				 * Détermine la hauteur d'un bloc à une position donnée
@@ -133,16 +434,16 @@
 				 */
 				getBlockHeight(x, z) {
 					// Créer une structure intéressante pour tester le culling
-					const centerX = this.WORLD_SIZE / 2;
-					const centerZ = this.WORLD_SIZE / 2;
-					const distanceFromCenter = Math.sqrt((x - centerX) ** 2 + (z - centerZ) ** 2);
+					const centerX = 0; // Centre du monde infini
+					const centerZ = 0;
+					const distanceFromCenter = Math.sqrt(x ** 2 + z ** 2);
 					
 					// Structure en pyramide inversée
-					if (distanceFromCenter < 3) {
+					if (distanceFromCenter < 5) {
 						return this.MAX_HEIGHT; // Hauteur maximale au centre
-					} else if (distanceFromCenter < 6) {
+					} else if (distanceFromCenter < 10) {
 						return 2; // Hauteur moyenne
-					} else if (distanceFromCenter < 9) {
+					} else if (distanceFromCenter < 20) {
 						return 1; // Hauteur minimale
 					}
 					
@@ -170,12 +471,16 @@
 					// Vérifier les voisins pour déterminer quelles faces sont visibles
 					const hasNeighbor = {
 						north: z > 0 && blockMap[x][z - 1][y],           // Z-
-						south: z < this.WORLD_SIZE - 1 && blockMap[x][z + 1][y], // Z+
-						east: x < this.WORLD_SIZE - 1 && blockMap[x + 1][z][y],  // X+
+						south: z < this.CHUNK_SIZE - 1 && blockMap[x][z + 1][y], // Z+
+						east: x < this.CHUNK_SIZE - 1 && blockMap[x + 1][z][y],  // X+
 						west: x > 0 && blockMap[x - 1][z][y],                     // X-
 						top: y < this.MAX_HEIGHT - 1 && blockMap[x][z][y + 1],   // Y+
 						bottom: y > 0 && blockMap[x][z][y - 1]                    // Y-
 					};
+
+					// Obtenir les coordonnées UV pour ce type de bloc
+					const uvCoords = this.blockTypes['DIRT']; // Pour l'instant, tous les blocs sont de la terre
+					const uvSize = 0.5; // Chaque texture fait 0.5x0.5 dans l'atlas
 
 					// Définir les faces du cube avec leurs normales
 					const faces = [
@@ -201,8 +506,13 @@
 								normals.push(...face.normal);
 							});
 
-							// Ajouter les UVs (coordonnées de texture)
-							uvs.push(0, 0, 1, 0, 1, 1, 0, 1);
+							// Ajouter les UVs pour le texture atlas
+							uvs.push(
+								uvCoords.u, uvCoords.v,                    // Coin bas-gauche
+								uvCoords.u + uvSize, uvCoords.v,           // Coin bas-droit
+								uvCoords.u + uvSize, uvCoords.v + uvSize, // Coin haut-droit
+								uvCoords.u, uvCoords.v + uvSize            // Coin haut-gauche
+							);
 
 							// Ajouter les indices pour former 2 triangles
 							indices.push(
@@ -223,6 +533,9 @@
 			}
 
 			const clock = new THREE.Clock();
+
+			// Créer le générateur de monde dans la portée globale
+			const worldGenerator = new WorldGenerator();
 
 			const scene = new THREE.Scene();
 			scene.background = new THREE.Color( 0x88ccee );
@@ -272,7 +585,7 @@
 			const NUM_SPHERES = 20; // Réduit de 100 à 20 pour les performances
 			const SPHERE_RADIUS = 0.2;
 
-			const STEPS_PER_FRAME = 5;
+			const STEPS_PER_FRAME = 1;
 
 			const sphereGeometry = new THREE.IcosahedronGeometry( SPHERE_RADIUS, 2 ); // Réduit de 5 à 2 subdivisions
 			const sphereMaterial = new THREE.MeshLambertMaterial( { color: 0xdede8d } );
@@ -596,8 +909,24 @@
 
 			}
 
-			// Créer le générateur de monde
-			const worldGenerator = new WorldGenerator();
+			// Optimisations spécifiques Apple Silicon
+			const isAppleSilicon = navigator.userAgent.includes('Mac') && 
+				!navigator.userAgent.includes('Intel') && 
+				navigator.userAgent.includes('Apple');
+
+			if (isAppleSilicon) {
+				console.log('Optimisations Apple Silicon détectées');
+				
+				// Augmenter la distance de rendu sur Apple Silicon
+				worldGenerator.RENDER_DISTANCE = 1; // 5x5 chunks au lieu de 3x3
+				
+				// Optimiser les paramètres de rendu
+				renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2)); // Limiter à 2x sur Apple Silicon
+				renderer.antialias = true; // Antialiasing activé
+				renderer.shadowMap.enabled = false; // Désactiver les ombres pour les performances
+				
+				console.log('Paramètres Apple Silicon appliqués');
+			}
 
 			// Créer le monde
 			const worldMesh = worldGenerator.createMinecraftWorld(scene, worldOctree);
@@ -663,6 +992,12 @@
 					updateSpheres( deltaTime );
 
 					teleportPlayerIfOob();
+					
+					// Mettre à jour les chunks selon la position du joueur
+					worldGenerator.updateChunks(camera.position.x, camera.position.z);
+					
+					// Mettre à jour l'Octree seulement si nécessaire (optimisation)
+					worldGenerator.updateOctreeIfNeeded();
 
 				}
 
@@ -674,4 +1009,5 @@
 
 		</script>
 	</body>
+</html>
 </html>
