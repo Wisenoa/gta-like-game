@@ -20,10 +20,11 @@
 	</head>
 	<body>
 		<div id="info">
-			Minecraft-like World - Block Collisions with Octree<br />
+			Minecraft-like World - Complex Terrain with Partial Octree<br />
 			MOUSE to look around and to throw balls<br/>
 			WASD to move and SPACE to jump<br/>
-			World: 30x30 blocks with height
+			World: Complex terrain with mountains, valleys, and multiple block types<br/>
+			Chunks: 20x20 blocks, Render Distance: 5x5 chunks, Max Height: 8 blocks
 		</div>
 		<div id="container"></div>
 
@@ -53,11 +54,11 @@
 			// Classe WorldGenerator intégrée directement
 			class WorldGenerator {
 				constructor() {
-					this.CHUNK_SIZE = 16; // Chunks de 16x16 blocs
-					this.RENDER_DISTANCE = 1; // Nombre de chunks à charger autour du joueur (3x3 = 9 chunks)
+					this.CHUNK_SIZE = 16; // Chunks plus grands pour plus de complexité
+					this.RENDER_DISTANCE = 1; // 5x5 chunks pour un monde plus grand
 					this.BLOCK_SIZE = 1;
 					this.BLOCK_HEIGHT = 1;
-					this.MAX_HEIGHT = 3; // Hauteur maximale pour tester le culling
+					this.MAX_HEIGHT = 8; // Hauteur maximale plus élevée pour plus de variété
 					
 					// Détecter Apple Silicon pour optimisations spécifiques
 					this.isAppleSilicon = this.detectAppleSilicon();
@@ -89,6 +90,8 @@
 					this.needsOctreeUpdate = false; // Flag pour optimiser la reconstruction de l'Octree
 					this.modifiedChunks = new Set(); // Set des chunks qui ont été modifiés
 					this.octreeChunks = new Map(); // Map des chunks déjà dans l'Octree
+					this.octreeThreshold = 10; // Seuil pour la reconstruction complète de l'Octree
+					this.logChunkUpdates = false; // Flag pour logger les mises à jour de chunks
 				}
 
 				/**
@@ -270,7 +273,9 @@
 					this.lastChunkX = chunkX;
 					this.lastChunkZ = chunkZ;
 					
-					console.log(`Mise à jour des chunks: joueur en chunk (${chunkX}, ${chunkZ})`);
+					if (this.logChunkUpdates) {
+						console.log(`Mise à jour des chunks: joueur en chunk (${chunkX}, ${chunkZ})`);
+					}
 					
 					// Décharger les chunks trop éloignés
 					this.unloadDistantChunks(chunkX, chunkZ);
@@ -337,12 +342,12 @@
 							const height = this.getBlockHeight(worldX, worldZ);
 							
 							for (let y = 0; y < height; y++) {
-								const blockX = (worldX - 8) * this.BLOCK_SIZE;
-								const blockZ = (worldZ - 8) * this.BLOCK_SIZE;
+								const blockX = (worldX - 10) * this.BLOCK_SIZE; // Ajusté pour les chunks de 20x20
+								const blockZ = (worldZ - 10) * this.BLOCK_SIZE;
 								const blockY = y * this.BLOCK_HEIGHT;
 								
-								// Créer une géométrie optimisée pour ce bloc
-								const optimizedGeometry = this.createOptimizedBlockGeometry(x, y, z, blockMap);
+								// Créer une géométrie optimisée pour ce bloc avec le type approprié
+								const optimizedGeometry = this.createOptimizedBlockGeometry(x, y, z, blockMap, worldX, worldZ, height);
 								
 								// Créer le mesh du bloc
 								const blockMesh = new THREE.Mesh(optimizedGeometry, this.blockMaterial);
@@ -386,6 +391,9 @@
 					this.modifiedChunks.add(chunkKey);
 					this.needsOctreeUpdate = true;
 					
+					// Mettre à jour le compteur
+					this.updateChunkCounter();
+					
 					console.log(`Chunk chargé: ${chunkKey} (${chunkGroup.children.length} blocs)`);
 				}
 
@@ -425,6 +433,9 @@
 						
 						// Marquer que l'Octree doit être mis à jour
 						this.needsOctreeUpdate = true;
+						
+						// Mettre à jour le compteur
+						this.updateChunkCounter();
 					}
 				}
 
@@ -438,6 +449,27 @@
 							this.updateOctreePartially();
 							this.needsOctreeUpdate = false;
 						});
+					}
+				}
+
+				/**
+				 * Met à jour l'affichage du nombre de chunks chargés dans le GUI
+				 */
+				updateChunkCounter() {
+					if (this.guiChunkStats) {
+						const loadedCount = this.loadedChunks.size;
+						const octreeCount = this.octreeChunks.size;
+						const modifiedCount = this.modifiedChunks.size;
+						
+						// Mettre à jour les valeurs dans le GUI
+						this.guiChunkStats.loadedChunks = loadedCount;
+						this.guiChunkStats.octreeChunks = octreeCount;
+						this.guiChunkStats.modifiedChunks = modifiedCount;
+						
+						// Forcer la mise à jour du GUI
+						if (this.guiController) {
+							this.guiController.updateDisplay();
+						}
 					}
 				}
 
@@ -459,6 +491,9 @@
 
 					// Nettoyer la liste des chunks modifiés
 					this.modifiedChunks.clear();
+					
+					// Mettre à jour le compteur après traitement de l'Octree
+					this.updateChunkCounter();
 				}
 
 				/**
@@ -485,7 +520,8 @@
 					}
 					
 					// Si trop de modifications, faire une reconstruction complète
-					if (chunksAdded + chunksRemoved > 3) {
+					const threshold = this.octreeThreshold || 10;
+					if (chunksAdded + chunksRemoved > threshold) {
 						console.log(`Trop de modifications (${chunksAdded + chunksRemoved}), reconstruction complète`);
 						this.worldOctree.fromGraphNode(this.worldGroup);
 						
@@ -535,21 +571,77 @@
 				 * @returns {number} Hauteur du bloc (nombre de niveaux)
 				 */
 				getBlockHeight(x, z) {
-					// Créer une structure intéressante pour tester le culling
-					const centerX = 0; // Centre du monde infini
+					// Créer un monde plus complexe avec des montagnes et vallées
+					
+					// Montagne centrale
+					const centerX = 0;
 					const centerZ = 0;
 					const distanceFromCenter = Math.sqrt(x ** 2 + z ** 2);
 					
-					// Structure en pyramide inversée
-					if (distanceFromCenter < 5) {
-						return this.MAX_HEIGHT; // Hauteur maximale au centre
-					} else if (distanceFromCenter < 10) {
-						return 2; // Hauteur moyenne
-					} else if (distanceFromCenter < 20) {
-						return 1; // Hauteur minimale
+					// Hauteur de base avec bruit simple
+					let height = 1;
+					
+					// Montagne principale au centre
+					if (distanceFromCenter < 15) {
+						height = Math.max(1, this.MAX_HEIGHT - Math.floor(distanceFromCenter / 3));
 					}
 					
-					return 1; // Hauteur de base partout ailleurs
+					// Ajouter des collines secondaires
+					const hill1 = Math.sqrt((x - 30) ** 2 + (z - 30) ** 2);
+					if (hill1 < 8) {
+						height = Math.max(height, 4 - Math.floor(hill1 / 2));
+					}
+					
+					const hill2 = Math.sqrt((x + 25) ** 2 + (z - 20) ** 2);
+					if (hill2 < 6) {
+						height = Math.max(height, 3 - Math.floor(hill2 / 2));
+					}
+					
+					// Vallée (zone plus basse)
+					const valley = Math.sqrt((x - 10) ** 2 + (z + 15) ** 2);
+					if (valley < 12) {
+						height = Math.max(1, height - 2);
+					}
+					
+					// Ajouter du bruit pour plus de réalisme
+					const noise = Math.sin(x * 0.1) * Math.cos(z * 0.1) * 0.5;
+					height += Math.floor(noise);
+					
+					return Math.max(1, Math.min(this.MAX_HEIGHT, height));
+				}
+
+				/**
+				 * Détermine le type de bloc selon la position et l'altitude
+				 * @param {number} worldX - Position X mondiale
+				 * @param {number} y - Hauteur du bloc
+				 * @param {number} worldZ - Position Z mondiale
+				 * @param {number} maxHeight - Hauteur maximale à cette position
+				 * @returns {string} Type de bloc
+				 */
+				getBlockType(worldX, y, worldZ, maxHeight) {
+					// Bloc de surface (herbe)
+					if (y === maxHeight - 1) {
+						return 'GRASS';
+					}
+					
+					// Couche de terre sous l'herbe
+					if (y >= maxHeight - 3) {
+						return 'DIRT';
+					}
+					
+					// Pierre en profondeur
+					if (y <= 2) {
+						return 'STONE';
+					}
+					
+					// Sable près de l'eau (zones basses)
+					const distanceFromCenter = Math.sqrt(worldX ** 2 + worldZ ** 2);
+					if (distanceFromCenter > 20 && y <= 3) {
+						return 'SAND';
+					}
+					
+					// Par défaut, terre
+					return 'DIRT';
 				}
 
 				/**
@@ -558,9 +650,12 @@
 				 * @param {number} y - Position Y du bloc
 				 * @param {number} z - Position Z du bloc
 				 * @param {Array} blockMap - Map 3D des blocs existants
+				 * @param {number} worldX - Position X mondiale
+				 * @param {number} worldZ - Position Z mondiale
+				 * @param {number} maxHeight - Hauteur maximale à cette position
 				 * @returns {THREE.BufferGeometry} Géométrie optimisée
 				 */
-				createOptimizedBlockGeometry(x, y, z, blockMap) {
+				createOptimizedBlockGeometry(x, y, z, blockMap, worldX, worldZ, maxHeight) {
 					const geometry = new THREE.BufferGeometry();
 					const vertices = [];
 					const normals = [];
@@ -580,8 +675,9 @@
 						bottom: y > 0 && blockMap[x][z][y - 1]                    // Y-
 					};
 
-					// Obtenir les coordonnées UV pour ce type de bloc
-					const uvCoords = this.blockTypes['DIRT']; // Pour l'instant, tous les blocs sont de la terre
+					// Déterminer le type de bloc selon la position
+					const blockType = this.getBlockType(worldX, y, worldZ, maxHeight);
+					const uvCoords = this.blockTypes[blockType];
 					const uvSize = 0.5; // Chaque texture fait 0.5x0.5 dans l'atlas
 
 					// Définir les faces du cube avec leurs normales
@@ -1038,7 +1134,7 @@
 			helper.visible = false;
 			scene.add( helper );
 
-			const gui = new GUI( { width: 200 } );
+			const gui = new GUI( { width: 250 } );
 			
 			// Contrôles de performance
 			const performanceControls = {
@@ -1062,6 +1158,123 @@
 				.onChange( function ( value ) {
 					renderer.setPixelRatio( value ? Math.min(window.devicePixelRatio, 2) : 1 );
 				} );
+
+			// Contrôles de chunks
+			const chunkControls = {
+				renderDistance: worldGenerator.RENDER_DISTANCE,
+				chunkSize: worldGenerator.CHUNK_SIZE,
+				maxHeight: worldGenerator.MAX_HEIGHT,
+				batchSize: worldGenerator.BATCH_SIZE,
+				octreeThreshold: 10 // Seuil pour la reconstruction complète
+			};
+			
+			const chunkFolder = gui.addFolder('Chunk Settings');
+			
+			chunkFolder.add(chunkControls, 'renderDistance', 1, 5, 1)
+				.name('Render Distance')
+				.onChange(function(value) {
+					worldGenerator.RENDER_DISTANCE = value;
+					console.log(`Render Distance changé à: ${value} (${(value*2+1)}x${(value*2+1)} chunks)`);
+				});
+			
+			chunkFolder.add(chunkControls, 'chunkSize', 8, 32, 4)
+				.name('Chunk Size')
+				.onChange(function(value) {
+					worldGenerator.CHUNK_SIZE = value;
+					console.log(`Chunk Size changé à: ${value}x${value}`);
+					// Note: Nécessite un redémarrage pour prendre effet complètement
+				});
+			
+			chunkFolder.add(chunkControls, 'maxHeight', 1, 16, 1)
+				.name('Max Height')
+				.onChange(function(value) {
+					worldGenerator.MAX_HEIGHT = value;
+					console.log(`Max Height changé à: ${value}`);
+					// Note: Nécessite un redémarrage pour prendre effet complètement
+				});
+			
+			chunkFolder.add(chunkControls, 'batchSize', 1, 16, 1)
+				.name('Batch Size')
+				.onChange(function(value) {
+					worldGenerator.BATCH_SIZE = value;
+					console.log(`Batch Size changé à: ${value}`);
+				});
+			
+			chunkFolder.add(chunkControls, 'octreeThreshold', 1, 20, 1)
+				.name('Octree Threshold')
+				.onChange(function(value) {
+					worldGenerator.octreeThreshold = value;
+					console.log(`Octree Threshold changé à: ${value}`);
+				});
+			
+			chunkFolder.open(); // Ouvrir le dossier par défaut
+
+			// Contrôles d'information
+			const infoControls = {
+				showStats: false,
+				logChunkUpdates: false
+			};
+			
+			const infoFolder = gui.addFolder('Information');
+			
+			infoFolder.add(infoControls, 'showStats')
+				.name('Show Chunk Stats')
+				.onChange(function(value) {
+					if (value) {
+						console.log('=== STATISTIQUES CHUNKS ===');
+						console.log(`Chunks chargés: ${worldGenerator.loadedChunks.size}`);
+						console.log(`Chunks dans l'Octree: ${worldGenerator.octreeChunks.size}`);
+						console.log(`Chunks modifiés: ${worldGenerator.modifiedChunks.size}`);
+						console.log(`Render Distance: ${worldGenerator.RENDER_DISTANCE}`);
+						console.log(`Chunk Size: ${worldGenerator.CHUNK_SIZE}x${worldGenerator.CHUNK_SIZE}`);
+						console.log(`Max Height: ${worldGenerator.MAX_HEIGHT}`);
+						console.log(`Batch Size: ${worldGenerator.BATCH_SIZE}`);
+						console.log(`Octree Threshold: ${worldGenerator.octreeThreshold}`);
+					}
+				});
+			
+			infoFolder.add(infoControls, 'logChunkUpdates')
+				.name('Log Chunk Updates')
+				.onChange(function(value) {
+					worldGenerator.logChunkUpdates = value;
+				});
+			
+			infoFolder.open();
+
+			// Statistiques de chunks en temps réel
+			const chunkStats = {
+				loadedChunks: 0,
+				octreeChunks: 0,
+				modifiedChunks: 0
+			};
+			
+			// Stocker les références dans le worldGenerator
+			worldGenerator.guiChunkStats = chunkStats;
+			
+			const statsFolder = gui.addFolder('Chunk Statistics');
+			
+			const loadedController = statsFolder.add(chunkStats, 'loadedChunks')
+				.name('Chunks chargés')
+				.listen();
+			
+			const octreeController = statsFolder.add(chunkStats, 'octreeChunks')
+				.name('Chunks Octree')
+				.listen();
+			
+			const modifiedController = statsFolder.add(chunkStats, 'modifiedChunks')
+				.name('Chunks modifiés')
+				.listen();
+			
+			// Stocker le contrôleur pour la mise à jour
+			worldGenerator.guiController = {
+				updateDisplay: function() {
+					loadedController.updateDisplay();
+					octreeController.updateDisplay();
+					modifiedController.updateDisplay();
+				}
+			};
+			
+			statsFolder.open();
 
 			function teleportPlayerIfOob() {
 
