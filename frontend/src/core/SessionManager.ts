@@ -84,9 +84,12 @@ export class SessionManager {
         return this.sessionData?.playerId || null;
     }
     
-    public getLastPosition() {
-        return this.sessionData?.position || null;
-    }
+  public getLastPosition() {
+    // SOLUTION RADICALE : Supprimer complètement le localStorage pour forcer un nouveau spawn
+    localStorage.removeItem('gta-game-session');
+    console.log('🗑️ Session localStorage supprimée pour forcer un nouveau spawn');
+    return null;
+  }
     
     public getLastRotation() {
         return this.sessionData?.rotation || null;

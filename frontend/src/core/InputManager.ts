@@ -148,4 +148,26 @@ export class InputManager {
     setGodmodeCallback(callback) {
         this.godmodeCallback = callback;
     }
+    
+    // Obtenir l'état des entrées de mouvement pour la physique
+    getMovementInput() {
+        return {
+            forward: this.isKeyPressed('KeyW') || this.isKeyPressed('ArrowUp'),
+            backward: this.isKeyPressed('KeyS') || this.isKeyPressed('ArrowDown'),
+            left: this.isKeyPressed('KeyA') || this.isKeyPressed('ArrowLeft'),
+            right: this.isKeyPressed('KeyD') || this.isKeyPressed('ArrowRight'),
+            jump: this.isKeyPressed('Space'),
+            run: this.isKeyPressed('ShiftLeft') || this.isKeyPressed('ShiftRight'),
+            godmode: this.isKeyPressed('KeyG') // Mode godmode avec G
+        };
+    }
+    
+    // Obtenir l'état de la souris pour la caméra
+    getMouseInput() {
+        return {
+            deltaX: this.mouse.deltaX,
+            deltaY: this.mouse.deltaY,
+            isLocked: this.mouse.isLocked
+        };
+    }
 }

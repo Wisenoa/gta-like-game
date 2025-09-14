@@ -2,7 +2,6 @@ import * as THREE from "three";
 import { Game } from "./core/Game";
 import { InputManager } from "./core/InputManager";
 import { Player } from "./game/Player";
-import { World } from "./game/World";
 import { NetworkService } from "./core/NetworkService";
 import { OtherPlayersManager } from "./game/OtherPlayersManager";
 import { Minimap } from "./game/Minimap";
@@ -13,7 +12,6 @@ class Main {
   private game: Game;
   private inputManager: InputManager;
   private player: Player;
-  private world: World;
   private networkService: NetworkService;
   private otherPlayersManager: OtherPlayersManager | null;
   private minimap: Minimap | null;
@@ -25,8 +23,8 @@ class Main {
   constructor() {
     this.game = new Game();
     this.inputManager = new InputManager();
+    // Réactiver le Player SEULEMENT pour les contrôles et la caméra
     this.player = new Player();
-    this.world = new World();
     this.networkService = new NetworkService();
     this.otherPlayersManager = null;
     this.minimap = null;
@@ -40,14 +38,11 @@ class Main {
   }
 
   async init() {
-    // Initialiser le jeu
+    // Initialiser le jeu (inclut maintenant le chargement des blocs)
     this.game.init();
 
-    // Ajouter le monde (sera créé quand on recevra les données de carte)
-    this.game.scene?.add(this.world.group);
-
-    // Ajouter le joueur
-    this.player.init(this.game.camera!, this.inputManager);
+    // Initialiser le Player avec le système de blocs pour la collision
+    this.player.init(this.game.camera!, this.inputManager, this.game.blockManager);
     this.game.scene?.add(this.player.group);
 
     // Initialiser le gestionnaire des autres joueurs
@@ -69,23 +64,15 @@ class Main {
       this.showDeathScreen();
     };
 
-    // Récupérer automatiquement les données de carte du serveur
-    console.log("🗺️ Récupération automatique des données de carte...");
-    try {
-      await this.loadMapFromServer();
-    } catch (error) {
-      console.error("❌ Erreur lors du chargement de la carte:", error);
-    }
+    // Configurer le mode debug (supprimé car plus de World)
+    // this.inputManager.setDebugCallback(() => {
+    //   this.world.toggleDebugMode();
+    // });
 
-    // Configurer le mode debug
-    this.inputManager.setDebugCallback(() => {
-      this.world.toggleDebugMode();
-    });
-
-    // Configurer l'affichage des positions des routes
-    this.inputManager.setRoadPositionsCallback(() => {
-      this.world.showRoadPositions();
-    });
+    // Configurer l'affichage des positions des routes (supprimé car plus de World)
+    // this.inputManager.setRoadPositionsCallback(() => {
+    //   this.world.showRoadPositions();
+    // });
 
     // Configurer le mode godmode
     this.inputManager.setGodmodeCallback(() => {
@@ -123,8 +110,8 @@ class Main {
     // Vérifier s'il y a une session valide avant de créer l'interface
     this.checkForValidSession();
 
-    // Positionner la caméra
-    this.game.camera?.position.set(0, 5, 10);
+    // Positionner la caméra au spawn (sera fait automatiquement par Game)
+    // this.game.camera?.position.set(0, 5, 10);
 
     // Masquer le loading
     const loadingElement = document.getElementById("loading");
@@ -137,41 +124,13 @@ class Main {
   }
 
   checkForValidSession() {
-    // Vérifier s'il y a une session valide
-    const sessionData = localStorage.getItem("gta-session");
-    const playerName = localStorage.getItem("gta-player-name");
-
-    console.log("🔍 Vérification de la session...");
-    console.log("Session data:", sessionData);
-    console.log("Player name:", playerName);
-
-    if (sessionData && playerName) {
-      try {
-        const session = JSON.parse(sessionData);
-        const maxAge = 24 * 60 * 60 * 1000; // 24 heures
-        const sessionAge = Date.now() - session.timestamp;
-
-        if (sessionAge < maxAge) {
-          console.log("🔄 Session valide trouvée, reconnexion automatique...");
-
-          // Afficher un message de reconnexion
-          this.showReconnectionMessage(playerName);
-
-          // Rejoindre automatiquement le jeu
-          setTimeout(() => {
-            this.networkService.joinGame(playerName, session);
-          }, 2000);
-
-          return; // Ne pas créer l'interface de connexion
-        } else {
-          console.log("⏰ Session expirée, nettoyage...");
-          localStorage.removeItem("gta-session");
-        }
-      } catch (error) {
-        console.error("Erreur lors de la vérification de la session:", error);
-        localStorage.removeItem("gta-session");
-      }
-    }
+    // SOLUTION RADICALE : Supprimer complètement la logique de session pour forcer un nouveau spawn
+    localStorage.removeItem("gta-session");
+    localStorage.removeItem("gta-player-name");
+    console.log("🗑️ Toutes les sessions supprimées pour forcer un nouveau spawn");
+    
+    // Ne pas faire de reconnexion automatique
+    return;
 
     // Créer l'interface de connexion normale
     this.loginManager = new LoginManager((playerName) => {
@@ -426,23 +385,11 @@ class Main {
       this.chatManager!.addServerNotification(data.message);
     });
 
-    // Écouter les données de carte
-    this.networkService.onMapData(async (mapData) => {
-      console.log("🗺️ Réception des données de carte:", mapData);
-      await this.world.receiveMapData(mapData);
-      // La carte sera créée automatiquement dans receiveMapData
-    });
-
-    // Fallback: si pas de données de carte après 5 secondes, créer une carte locale
-    setTimeout(async () => {
-      if (!this.world["isMapLoaded"]) {
-        console.log(
-          "⚠️ Pas de données de carte reçues, création d'une carte locale..."
-        );
-        await this.world["createLocalMap"]();
-        await this.world.create();
-      }
-    }, 5000);
+    // Les blocs sont maintenant chargés automatiquement par le Game
+    console.log("🌍 Le système de blocs est géré automatiquement par le Game");
+    
+    // Configurer le bouton de régénération de map
+    this.setupMapRegeneration();
   }
 
   gameLoop() {
@@ -460,10 +407,10 @@ class Main {
 
     const deltaTime = this.game.clock.getDelta();
 
-    // Mettre à jour le joueur
+    // Mettre à jour le joueur pour les contrôles et la caméra
     this.player.update(deltaTime);
 
-    // Mettre à jour la minimap
+    // Mettre à jour la minimap avec la position du Player
     if (this.minimap) {
       this.minimap.updatePlayerPosition(
         this.player.position,
@@ -471,24 +418,23 @@ class Main {
       );
     }
 
-    // Envoyer la position du joueur au serveur (avec système de tick)
-    const now = Date.now();
-    if (now - this.lastNetworkUpdate >= this.networkTickRate) {
-      // Ne pas envoyer si le joueur ne bouge pas et n'a pas bougé récemment
-      if (
-        this.player.isMoving ||
-        this.player.isWalking ||
-        this.player.isSprinting
-      ) {
-        this.networkService.sendPlayerMove(
-          this.player.position,
-          this.player.rotation,
-          this.player.isMoving,
-          this.player.speed
-        );
-        this.lastNetworkUpdate = now;
-      }
-    }
+    // DÉSACTIVER l'envoi de position du Player classique
+    // const now = Date.now();
+    // if (now - this.lastNetworkUpdate >= this.networkTickRate) {
+    //   if (
+    //     this.player.isMoving ||
+    //     this.player.isWalking ||
+    //     this.player.isSprinting
+    //   ) {
+    //     this.networkService.sendPlayerMove(
+    //       this.player.position,
+    //       this.player.rotation,
+    //       this.player.isMoving,
+    //       this.player.speed
+    //     );
+    //     this.lastNetworkUpdate = now;
+    //   }
+    // }
 
     // Mettre à jour l'UI
     this.updateUI();
@@ -507,13 +453,13 @@ class Main {
     const fpsElement = document.getElementById("fps");
     if (fpsElement) fpsElement.textContent = fps.toString();
 
-    // Mettre à jour la position
-    const pos = this.game.camera?.position;
+    // Mettre à jour la position (afficher la position réelle du joueur)
+    const playerPos = this.game.blockManager?.getPlayerPosition();
     const positionElement = document.getElementById("position");
-    if (pos && positionElement) {
-      positionElement.textContent = `X: ${pos.x.toFixed(1)}, Y: ${pos.y.toFixed(
+    if (playerPos && positionElement) {
+      positionElement.textContent = `X: ${playerPos.x.toFixed(1)}, Y: ${playerPos.y.toFixed(
         1
-      )}, Z: ${pos.z.toFixed(1)}`;
+      )}, Z: ${playerPos.z.toFixed(1)}`;
     }
 
     // Mettre à jour le nombre de joueurs connectés
@@ -588,21 +534,18 @@ class Main {
     }
   }
 
-  // Méthode pour charger la carte depuis le serveur
-  async loadMapFromServer(): Promise<void> {
-    console.log("🗺️ Chargement de la carte depuis le serveur...");
-    try {
-      const response = await fetch("http://localhost:3002/api/map");
-      if (response.ok) {
-        const mapData = await response.json();
-        console.log("✅ Données de carte récupérées:", mapData);
-        await this.world.receiveMapData(mapData);
-        console.log("✅ Carte chargée avec succès");
-      } else {
-        console.error("❌ Erreur HTTP:", response.status);
-      }
-    } catch (error) {
-      console.error("❌ Erreur lors du chargement de la carte:", error);
+  setupMapRegeneration() {
+    const regenerateBtn = document.getElementById('regenerate-map-btn');
+    if (regenerateBtn) {
+      regenerateBtn.onclick = async () => {
+        if (this.game.blockManager) {
+          await this.game.blockManager.regenerateWorld();
+          
+          // Repositionner la caméra après régénération
+          // DÉSACTIVER positionCameraForWorld car elle n'existe plus
+          // await this.game.positionCameraForWorld();
+        }
+      };
     }
   }
 }

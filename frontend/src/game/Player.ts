@@ -10,6 +10,9 @@ export class Player {
     velocity: THREE.Vector3;
     rotation: THREE.Euler;
     
+    // Référence au système de blocs pour synchroniser la position
+    blockManager: any = null;
+    
     // Rotations séparées pour éviter les problèmes d'ordre (style Call of Duty)
     pitch: number;
     yaw: number;
@@ -18,66 +21,69 @@ export class Player {
     // Quaternion pour un contrôle précis des rotations
     cameraQuaternion: THREE.Quaternion;
     
-    // Paramètres de mouvement
+    // Paramètres de mouvement style Call of Duty - SAUT RAPIDE ET NORMAL
     walkSpeed: number;
     runSpeed: number;
-    sprintSpeed: number;
     jumpForce: number;
-    gravity: number;
     isGrounded: boolean;
-    isSprinting: boolean;
     isWalking: boolean;
     isMoving: boolean;
+    speed: number;
     
     // Mode godmode
     isGodmode: boolean;
     godmodeSpeed: number;
-    speed: number;
     
-    // Physique
-    acceleration: number;
-    friction: number;
-    airFriction: number;
+    // Système de collision AABB (comme Minecraft)
+    collisionBox: {
+        width: number;
+        height: number;
+        depth: number;
+    };
     
-    // Sensibilité de la souris
+    // Mouvement simple (pas de friction complexe)
+    moveSpeed: number;
+    sprintSpeed: number;
+    jumpSpeed: number;
+    gravity: number;
+    
+    // Système de sprint et stamina
+    stamina: number;
+    maxStamina: number;
+    staminaRegenRate: number;
+    staminaDrainRate: number;
+    isSprinting: boolean;
+    
+    // Sensibilité de la souris (style Call of Duty arcade)
     mouseSensitivity: number;
     mouseSmoothing: number;
     
-    // Limites de rotation
-    maxPitch: number;
-    minPitch: number;
-    
-    // Stamina
-    stamina: number;
-    maxStamina: number;
-    staminaDrain: number;
-    staminaRegen: number;
-    isStaminaDepleted: boolean;
-    
-    // Santé
-    health: number;
+    // Santé et dégâts
     maxHealth: number;
-    isAlive: boolean;
-    isInvulnerable: boolean;
-    invulnerabilityTime: number;
-    deathTime: number;
+    currentHealth: number;
     isDead: boolean;
+    isInvulnerable: boolean;
     
     // Head bobbing
     headBobAmount: number;
     headBobSpeed: number;
     headBobTime: number;
     
+    // Limites de rotation
+    minPitch: number;
+    maxPitch: number;
+    
     // Mesh du joueur
     playerMesh: THREE.Mesh;
-    
+
     constructor() {
         this.group = new THREE.Group();
         this.camera = null;
         this.inputManager = null;
         
         // Propriétés du joueur
-        this.position = new THREE.Vector3(0, 5, 0);
+        // Position de spawn fixe
+        this.position = new THREE.Vector3(0.5, 13, 0.5);
         this.velocity = new THREE.Vector3();
         this.rotation = new THREE.Euler();
         
@@ -89,70 +95,73 @@ export class Player {
         // Quaternion pour un contrôle précis des rotations
         this.cameraQuaternion = new THREE.Quaternion();
         
-        // Paramètres de mouvement style Call of Duty
-        this.walkSpeed = 4.5;
-        this.runSpeed = 7.0;
-        this.sprintSpeed = 9.0;
-        this.jumpForce = 12;
-        this.gravity = -25;
+        // Paramètres de mouvement style Call of Duty - SAUT RAPIDE ET NORMAL
+        this.walkSpeed = 12; // Plus rapide
+        this.runSpeed = 18; // Plus rapide
+        this.jumpForce = 15; // Force normale mais rapide
         this.isGrounded = false;
-        this.isSprinting = false;
         this.isWalking = false;
         this.isMoving = false;
         this.speed = 0;
         
         // Mode godmode
         this.isGodmode = false;
-        this.godmodeSpeed = 15.0;
+        this.godmodeSpeed = 30.0; // Plus rapide en godmode
         
-        // Physique réaliste
-        this.acceleration = 15;
-        this.friction = 8;
-        this.airFriction = 2;
+        // Système de collision AABB (comme Minecraft)
+        this.collisionBox = {
+            width: 0.6,   // Largeur du joueur
+            height: 1.8, // Hauteur du joueur
+            depth: 0.6   // Profondeur du joueur
+        };
+        
+        // Mouvement simple (pas de friction complexe)
+        this.moveSpeed = 12.0; // Vitesse encore plus rapide
+        this.sprintSpeed = 18.0; // Vitesse de sprint (50% plus rapide)
+        this.jumpSpeed = 7.0; // Force de saut (comme Minecraft)
+        this.gravity = -20.0; // Gravité simple
+        
+        // Système de sprint et stamina
+        this.stamina = 100; // Stamina actuelle
+        this.maxStamina = 100; // Stamina maximale
+        this.staminaRegenRate = 20; // Régénération par seconde
+        this.staminaDrainRate = 30; // Déplétion par seconde en sprint
+        this.isSprinting = false;
         
         // Sensibilité de la souris (style Call of Duty arcade)
         this.mouseSensitivity = 1.0; // Multiplicateur pour InputManager
         this.mouseSmoothing = 1.0; // Pas de smoothing pour réactivité maximale
         
-        // Limites de rotation verticale (style Call of Duty)
-        this.maxPitch = Math.PI / 2 - 0.05; // 89.95 degrés
-        this.minPitch = -Math.PI / 2 + 0.05; // -89.95 degrés
-        
-        // Stamina pour le sprint
-        this.stamina = 100;
-        this.maxStamina = 100;
-        this.staminaDrain = 30; // par seconde
-        this.staminaRegen = 20; // par seconde
-        this.isStaminaDepleted = false;
-        
-        // Santé du joueur
-        this.health = 100;
+        // Santé et dégâts
         this.maxHealth = 100;
-        this.isAlive = true;
-        this.isInvulnerable = false;
-        this.invulnerabilityTime = 0;
-        this.deathTime = 0;
+        this.currentHealth = 100;
         this.isDead = false;
+        this.isInvulnerable = false;
         
         // Head bobbing
         this.headBobAmount = 0.02;
         this.headBobSpeed = 8;
         this.headBobTime = 0;
+        
+        // Limites de rotation
+        this.minPitch = -Math.PI / 2;
+        this.maxPitch = Math.PI / 2;
     }
     
-    init(camera, inputManager) {
+    init(camera, inputManager, blockManager = null) {
         this.camera = camera;
         this.inputManager = inputManager;
+        this.blockManager = blockManager;
         
         // Créer le corps du joueur (invisible mais pour la physique)
         const playerGeometry = new THREE.CapsuleGeometry(0.5, 1.8);
         const playerMaterial = new THREE.MeshBasicMaterial({ 
             color: 0xff0000, 
             transparent: true, 
-            opacity: 0.3 
+            opacity: 0.0 // Rendre le corps du joueur invisible
         });
         this.playerMesh = new THREE.Mesh(playerGeometry, playerMaterial);
-        this.playerMesh.position.y = 0.9;
+        this.playerMesh.position.y = 0.9; // Positionner le mesh au centre de la capsule
         this.group.add(this.playerMesh);
         
         // Positionner le joueur
@@ -162,20 +171,12 @@ export class Player {
     update(deltaTime) {
         // Si le joueur est mort, ne pas mettre à jour le mouvement
         if (this.isDead) {
-            this.updateHealth(deltaTime);
             return;
         }
         
+        // Nouveau système de mouvement simple (comme Minecraft)
         this.handleInput(deltaTime);
-        
-        // En mode godmode, utiliser une physique différente
-        if (this.isGodmode) {
-            this.updateGodmodePhysics(deltaTime);
-        } else {
-            this.updatePhysics(deltaTime);
-        }
-        
-        this.updateHealth(deltaTime); // Mettre à jour la santé
+        this.updateSimplePhysics(deltaTime);
         this.updateCamera();
     }
     
@@ -197,172 +198,155 @@ export class Player {
             this.camera.rotation.set(this.pitch, this.yaw, 0, 'YXZ');
         }
         
-        // Gestion du sprint et de la stamina
+        // Mouvement simple (comme Minecraft)
+        const movementInput = this.inputManager.getMovementInput();
+        
+        // Calculer la direction du mouvement
+        const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(this.camera!.quaternion);
+        const right = new THREE.Vector3(1, 0, 0).applyQuaternion(this.camera!.quaternion);
+        
+        const moveDirection = new THREE.Vector3();
+        if (movementInput.forward) moveDirection.add(forward);
+        if (movementInput.backward) moveDirection.sub(forward);
+        if (movementInput.left) moveDirection.sub(right);
+        if (movementInput.right) moveDirection.add(right);
+        
+        moveDirection.normalize();
+        
+        // Gestion du sprint
         this.handleSprint(deltaTime);
         
-        // Mouvement WASD avec physique réaliste
-        const moveVector = new THREE.Vector3();
-        
-        // Détection des touches de mouvement
-        if (this.inputManager.isKeyPressed('KeyW')) {
-            moveVector.z -= 1;
-        }
-        if (this.inputManager.isKeyPressed('KeyS')) {
-            moveVector.z += 1;
-        }
-        if (this.inputManager.isKeyPressed('KeyA')) {
-            moveVector.x -= 1;
-        }
-        if (this.inputManager.isKeyPressed('KeyD')) {
-            moveVector.x += 1;
-        }
-        
-        // Normaliser le vecteur de mouvement
-        if (moveVector.length() > 0) {
-            moveVector.normalize();
-            this.isWalking = true;
-            this.isMoving = true;
-            
-            // Appliquer la rotation de la caméra au mouvement
-            const cameraDirection = new THREE.Vector3();
-            if (this.camera) {
-                this.camera.getWorldDirection(cameraDirection);
-            }
-            cameraDirection.y = 0;
-            cameraDirection.normalize();
-            
-            const right = new THREE.Vector3();
-            right.crossVectors(cameraDirection, new THREE.Vector3(0, 1, 0));
-            
-            const finalMove = new THREE.Vector3();
-            finalMove.addScaledVector(cameraDirection, -moveVector.z);
-            finalMove.addScaledVector(right, moveVector.x);
-            
-            // Déterminer la vitesse selon l'état
-            let targetSpeed;
-            if (this.isSprinting && !this.isStaminaDepleted) {
-                targetSpeed = this.sprintSpeed;
-            } else if (this.inputManager.isKeyPressed('ShiftLeft') || 
-                      this.inputManager.isKeyPressed('ShiftRight')) {
-                targetSpeed = this.runSpeed;
-            } else {
-                targetSpeed = this.walkSpeed;
-            }
-            
-            // Appliquer l'accélération
-            const targetVelocity = new THREE.Vector3(
-                finalMove.x * targetSpeed,
-                this.velocity.y,
-                finalMove.z * targetSpeed
-            );
-            
-            // Interpolation fluide vers la vitesse cible
-            this.velocity.lerp(targetVelocity, this.acceleration * deltaTime);
-            
-            // Calculer la vitesse actuelle
-            this.speed = Math.sqrt(this.velocity.x * this.velocity.x + this.velocity.z * this.velocity.z);
-            
+        // Appliquer le mouvement horizontal (simple, pas de friction)
+        if (moveDirection.lengthSq() > 0) {
+            const currentSpeed = this.isSprinting ? this.sprintSpeed : this.moveSpeed;
+            this.velocity.x = moveDirection.x * currentSpeed;
+            this.velocity.z = moveDirection.z * currentSpeed;
         } else {
-            this.isWalking = false;
-            this.isSprinting = false;
-            this.isMoving = false;
-            
-            // Appliquer la friction
-            const friction = this.isGrounded ? this.friction : this.airFriction;
-            this.velocity.x *= Math.pow(0.1, friction * deltaTime);
-            this.velocity.z *= Math.pow(0.1, friction * deltaTime);
-            
-            // Calculer la vitesse actuelle
-            this.speed = Math.sqrt(this.velocity.x * this.velocity.x + this.velocity.z * this.velocity.z);
+            this.velocity.x = 0;
+            this.velocity.z = 0;
         }
         
-        // Contrôles de sensibilité (style Call of Duty arcade)
-        if (this.inputManager.isKeyPressed('Equal') || this.inputManager.isKeyPressed('NumpadAdd')) {
-            this.setMouseSensitivity(this.mouseSensitivity + 0.2); // Pas plus grand pour ajustement fin
-        }
-        if (this.inputManager.isKeyPressed('Minus') || this.inputManager.isKeyPressed('NumpadSubtract')) {
-            this.setMouseSensitivity(this.mouseSensitivity - 0.2); // Pas plus grand pour ajustement fin
-        }
-        
-        // Reset de la sensibilité avec la touche 0
-        if (this.inputManager.isKeyPressed('Digit0') || this.inputManager.isKeyPressed('Numpad0')) {
-            this.setMouseSensitivity(1.0);
-        }
-        
-        // Contrôles de test pour la santé
-        if (this.inputManager.isKeyPressed('KeyH')) {
-            this.heal(10); // Soigner 10 HP
-        }
-        if (this.inputManager.isKeyPressed('KeyJ')) {
-            this.takeDamage(20); // Infliger 20 dégâts
-        }
-        if (this.inputManager.isKeyPressed('KeyK')) {
-            this.revive(); // Ressusciter
-        }
-        
-        // Contrôles de test pour les autres joueurs
-        if (this.inputManager.isKeyPressed('KeyT')) {
-            // Créer un joueur de test
-            this.createTestPlayer?.();
-        }
-        if (this.inputManager.isKeyPressed('KeyY')) {
-            // Supprimer tous les joueurs de test
-            this.clearTestPlayers?.();
-        }
-        
-        // Saut amélioré
-        if (this.inputManager.isKeyPressed('Space') && this.isGrounded) {
-            this.velocity.y = this.jumpForce;
+        // Appliquer le saut
+        if (movementInput.jump && this.isGrounded) {
+            this.velocity.y = this.jumpSpeed;
             this.isGrounded = false;
         }
         
+        // Mouvement vertical en godmode
+        if (this.isGodmode) {
+            if (movementInput.jump) { // Espace pour monter
+                this.velocity.y = this.godmodeSpeed;
+            } else if (movementInput.run) { // Shift pour descendre
+                this.velocity.y = -this.godmodeSpeed;
+            } else {
+                this.velocity.y = 0; // Pas de gravité en godmode
+            }
+        }
+        
+        // Mettre à jour l'état de mouvement
+        this.isMoving = moveDirection.lengthSq() > 0;
+        this.isWalking = this.isMoving;
+        this.speed = Math.sqrt(this.velocity.x * this.velocity.x + this.velocity.z * this.velocity.z);
     }
     
     handleSprint(deltaTime) {
-        // Gestion du sprint avec stamina
-        const isSprintKeyPressed = this.inputManager.isKeyPressed('ShiftLeft') || 
-                                  this.inputManager.isKeyPressed('ShiftRight');
+        const movementInput = this.inputManager.getMovementInput();
         
-        if (isSprintKeyPressed && this.isWalking && this.stamina > 0 && !this.isStaminaDepleted) {
+        // Vérifier si le joueur veut sprinter (Shift + mouvement)
+        const wantsToSprint = movementInput.run && movementInput.forward && this.stamina > 0;
+        
+        if (wantsToSprint) {
+            // Commencer le sprint
             this.isSprinting = true;
-            this.stamina -= this.staminaDrain * deltaTime;
-            
-            if (this.stamina <= 0) {
-                this.stamina = 0;
-                this.isStaminaDepleted = true;
-                this.isSprinting = false;
-            }
+            // Consommer la stamina
+            this.stamina -= this.staminaDrainRate * deltaTime;
+            this.stamina = Math.max(0, this.stamina);
         } else {
+            // Arrêter le sprint
             this.isSprinting = false;
-            
-            // Régénération de la stamina
-            if (this.stamina < this.maxStamina) {
-                this.stamina += this.staminaRegen * deltaTime;
-                if (this.stamina >= this.maxStamina) {
-                    this.stamina = this.maxStamina;
-                    this.isStaminaDepleted = false;
-                }
-            }
+            // Régénérer la stamina
+            this.stamina += this.staminaRegenRate * deltaTime;
+            this.stamina = Math.min(this.maxStamina, this.stamina);
+        }
+        
+        // Si la stamina est épuisée, forcer l'arrêt du sprint
+        if (this.stamina <= 0) {
+            this.isSprinting = false;
         }
     }
     
-    updatePhysics(deltaTime) {
-        // Appliquer la gravité
-        this.velocity.y += this.gravity * deltaTime;
-        
-        // Mettre à jour la position
-        this.position.addScaledVector(this.velocity, deltaTime);
-        
-        // Collision avec le sol (simplifiée)
-        if (this.position.y <= 0) {
-            this.position.y = 0;
-            this.velocity.y = 0;
-            this.isGrounded = true;
+    // Nouveau système de physique simple (comme Minecraft)
+    updateSimplePhysics(deltaTime) {
+        if (this.isGodmode) {
+            // En godmode, pas de gravité
+            this.position.addScaledVector(this.velocity, deltaTime);
+        } else {
+            // Appliquer la gravité
+            this.velocity.y += this.gravity * deltaTime;
+            
+            // Mouvement par axe (comme Minecraft)
+            this.moveAxis('x', deltaTime);
+            this.moveAxis('y', deltaTime);
+            this.moveAxis('z', deltaTime);
         }
         
         // Mettre à jour la position du groupe
         this.group.position.copy(this.position);
     }
+    
+    // Mouvement par axe avec collision AABB (comme Minecraft)
+    moveAxis(axis: 'x' | 'y' | 'z', deltaTime: number) {
+        const oldPos = this.position[axis];
+        this.position[axis] += this.velocity[axis] * deltaTime;
+        
+        // Vérifier les collisions pour cet axe
+        if (this.checkCollision()) {
+            // Collision détectée, annuler le mouvement
+            this.position[axis] = oldPos;
+            this.velocity[axis] = 0;
+            
+            // Si c'est l'axe Y et qu'on tombe, on est au sol
+            if (axis === 'y' && this.velocity.y < 0) {
+                this.isGrounded = true;
+            }
+        }
+    }
+    
+    // Vérification de collision AABB optimisée (comme Minecraft)
+    checkCollision(): boolean {
+        if (!this.blockManager) return false;
+        
+        // Calculer les coins de la boîte de collision
+        const minX = this.position.x - this.collisionBox.width / 2;
+        const maxX = this.position.x + this.collisionBox.width / 2;
+        const minY = this.position.y;
+        const maxY = this.position.y + this.collisionBox.height;
+        const minZ = this.position.z - this.collisionBox.depth / 2;
+        const maxZ = this.position.z + this.collisionBox.depth / 2;
+        
+        // Vérifier seulement les blocs dans la zone de collision (optimisé)
+        const startX = Math.floor(minX);
+        const endX = Math.floor(maxX);
+        const startY = Math.floor(minY);
+        const endY = Math.floor(maxY);
+        const startZ = Math.floor(minZ);
+        const endZ = Math.floor(maxZ);
+        
+        // Vérifier les blocs dans la zone de collision
+        for (let x = startX; x <= endX; x++) {
+            for (let y = startY; y <= endY; y++) {
+                for (let z = startZ; z <= endZ; z++) {
+                    const blockType = this.blockManager.getBlockAt(x, y, z);
+                    if (blockType && blockType !== 'air') {
+                        return true; // Collision détectée
+                    }
+                }
+            }
+        }
+        
+        return false; // Pas de collision
+    }
+    
     
     updateCamera() {
         // Positionner la caméra
@@ -385,168 +369,86 @@ export class Player {
         }
         
         // La rotation est maintenant appliquée directement dans handleInput
-        
-        // Ajouter un léger effet de recul lors du saut
-        if (!this.isGrounded && this.velocity.y < 0 && this.camera) {
-            this.camera.position.y += this.velocity.y * 0.01;
-        }
     }
     
-    // Méthodes pour ajuster la sensibilité (style Call of Duty arcade)
-    setMouseSensitivity(sensitivity) {
-        this.mouseSensitivity = Math.max(0.1, Math.min(5.0, sensitivity)); // Plage étendue pour arcade
+    
+    // Méthodes utilitaires pour la santé
+    setMouseSensitivity(sensitivity: number): void {
+        this.mouseSensitivity = sensitivity;
         if (this.inputManager) {
-            this.inputManager.setMouseSensitivity(sensitivity * 0.003); // Sensibilité de base élevée
+            this.inputManager.setMouseSensitivity(sensitivity);
         }
     }
     
-    getMouseSensitivity() {
+    getMouseSensitivity(): number {
         return this.mouseSensitivity;
     }
     
-    setMouseSmoothing(smoothing) {
-        // Pas de smoothing pour réactivité maximale (style arcade)
-        this.mouseSmoothing = 1.0;
+    setMouseSmoothing(smoothing: number): void {
+        this.mouseSmoothing = smoothing;
+        if (this.inputManager) {
+            this.inputManager.setMouseSmoothing(smoothing);
+        }
     }
     
-    getMouseSmoothing() {
+    getMouseSmoothing(): number {
         return this.mouseSmoothing;
     }
     
-    // Méthodes pour gérer la santé
-    takeDamage(damage: number) {
-        if (this.isInvulnerable || !this.isAlive || this.isDead) return;
+    // Méthodes pour les dégâts et la santé
+    takeDamage(damage: number): void {
+        if (this.isDead || this.isInvulnerable) return;
         
-        this.health -= damage;
-        this.health = Math.max(0, this.health);
-        
-        // Déclencher l'invulnérabilité temporaire
-        this.isInvulnerable = true;
-        this.invulnerabilityTime = 1.0; // 1 seconde d'invulnérabilité
-        
-        // Vérifier si le joueur est mort
-        if (this.health <= 0) {
+        this.currentHealth -= damage;
+        if (this.currentHealth <= 0) {
+            this.currentHealth = 0;
             this.die();
         }
-        
-        console.log(`💔 Dégâts reçus: ${damage}, Santé restante: ${this.health}`);
     }
     
-    die() {
-        this.isAlive = false;
+    die(): void {
         this.isDead = true;
-        this.deathTime = Date.now();
-        
-        // Arrêter le mouvement
+        this.currentHealth = 0;
         this.velocity.set(0, 0, 0);
-        this.isWalking = false;
-        this.isSprinting = false;
-        
-        console.log('💀 Joueur mort !');
-        
-        // Déclencher l'événement de mort
-        this.onDeath?.();
+        this.isGrounded = false;
     }
     
-    onDeath?: () => void; // Callback pour la mort
-    
-    heal(amount: number) {
-        if (!this.isAlive) return;
+    heal(amount: number): void {
+        if (this.isDead) return;
         
-        this.health += amount;
-        this.health = Math.min(this.maxHealth, this.health);
-        
-        console.log(`💚 Soins reçus: ${amount}, Santé actuelle: ${this.health}`);
+        this.currentHealth = Math.min(this.maxHealth, this.currentHealth + amount);
     }
     
-    revive() {
-        this.health = this.maxHealth;
-        this.isAlive = true;
+    revive(): void {
         this.isDead = false;
+        this.currentHealth = this.maxHealth;
         this.isInvulnerable = false;
-        this.invulnerabilityTime = 0;
-        this.deathTime = 0;
-        
-        console.log('🔄 Joueur ressuscité !');
-        
-        // Déclencher l'événement de résurrection
-        this.onRevive?.();
     }
     
-    onRevive?: () => void; // Callback pour la résurrection
-    
-    // Callbacks pour les joueurs de test
-    createTestPlayer?: () => void;
-    clearTestPlayers?: () => void;
-    
-    updateHealth(deltaTime: number) {
-        // Gérer l'invulnérabilité temporaire
-        if (this.isInvulnerable) {
-            this.invulnerabilityTime -= deltaTime;
-            if (this.invulnerabilityTime <= 0) {
-                this.isInvulnerable = false;
-            }
-        }
-        
-        // Régénération lente de la santé si en vie et pas de dégâts récents
-        if (this.isAlive && !this.isInvulnerable && this.health < this.maxHealth) {
-            this.health += 5 * deltaTime; // 5 HP par seconde
-            this.health = Math.min(this.maxHealth, this.health);
-        }
+    // Méthodes de test
+    createTestPlayer(): void {
+        // Créer un joueur de test
     }
     
+    clearTestPlayers(): void {
+        // Supprimer tous les joueurs de test
+    }
+    
+    // Méthodes pour obtenir des informations
     getHealthPercentage(): number {
-        return (this.health / this.maxHealth) * 100;
+        return (this.currentHealth / this.maxHealth) * 100;
     }
     
-    // Mode godmode
-    toggleGodmode() {
+    // Méthodes pour le mode godmode
+    toggleGodmode(): void {
         this.isGodmode = !this.isGodmode;
-        console.log(`🕊️ Mode godmode: ${this.isGodmode ? 'ACTIVÉ' : 'DÉSACTIVÉ'}`);
-        
         if (this.isGodmode) {
-            // En mode godmode, désactiver la gravité et la physique normale
-            this.velocity.y = 0;
-            this.isGrounded = true;
+            this.isInvulnerable = true;
+            this.currentHealth = this.maxHealth;
         }
-    }
-    
-    updateGodmodePhysics(deltaTime) {
-        // En mode godmode, mouvement libre sans gravité
-        const moveVector = new THREE.Vector3();
-        
-        // Mouvement horizontal (WASD)
-        if (this.inputManager.isKeyPressed('KeyW')) moveVector.z -= 1;
-        if (this.inputManager.isKeyPressed('KeyS')) moveVector.z += 1;
-        if (this.inputManager.isKeyPressed('KeyA')) moveVector.x -= 1;
-        if (this.inputManager.isKeyPressed('KeyD')) moveVector.x += 1;
-        
-        // Mouvement vertical (Space/Ctrl)
-        if (this.inputManager.isKeyPressed('Space')) moveVector.y += 1;
-        if (this.inputManager.isKeyPressed('ControlLeft') || this.inputManager.isKeyPressed('ControlRight')) moveVector.y -= 1;
-        
-        // Normaliser et appliquer la vitesse
-        if (moveVector.length() > 0) {
-            moveVector.normalize();
-            
-            // Appliquer la rotation de la caméra au mouvement
-            const cameraDirection = new THREE.Vector3();
-            this.camera?.getWorldDirection(cameraDirection);
-            
-            // Créer un vecteur de mouvement basé sur la direction de la caméra
-            const forward = new THREE.Vector3(cameraDirection.x, 0, cameraDirection.z).normalize();
-            const right = new THREE.Vector3().crossVectors(forward, new THREE.Vector3(0, 1, 0)).normalize();
-            
-            const finalMove = new THREE.Vector3();
-            finalMove.addScaledVector(forward, -moveVector.z);
-            finalMove.addScaledVector(right, moveVector.x);
-            finalMove.y = moveVector.y; // Mouvement vertical direct
-            
-            // Appliquer le mouvement
-            this.position.addScaledVector(finalMove, this.godmodeSpeed * deltaTime);
-        }
-        
-        // Mettre à jour la position du groupe
-        this.group.position.copy(this.position);
     }
 }
+
+
+
+

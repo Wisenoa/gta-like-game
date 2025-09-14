@@ -2,10 +2,9 @@ import * as THREE from "three";
 import { ModelManager } from "./ModelManager";
 import { RoadManager } from "./RoadManager";
 import { GroundManager } from "./GroundManager";
-import { DebugManager } from "./DebugManager";
 
 export interface MapElement {
-  type: "road" | "ground";
+  type: "road" | "ground" | "streetlight" | "building";
   position: { x: number; y: number; z: number };
   rotation: { x: number; y: number; z: number };
   scale: { x: number; y: number; z: number };
@@ -28,17 +27,12 @@ export class World {
   private modelManager: ModelManager;
   private roadManager: RoadManager;
   private groundManager: GroundManager;
-  private debugManager: DebugManager;
 
   constructor() {
     this.group = new THREE.Group();
     this.modelManager = new ModelManager();
     this.roadManager = new RoadManager(this.modelManager);
     this.groundManager = new GroundManager();
-    this.debugManager = new DebugManager();
-    
-    // Ajouter les labels de debug au groupe principal
-    this.group.add(this.debugManager.getDebugLabels());
     
     console.log("🌍 Monde initialisé - version modulaire");
   }
@@ -99,36 +93,28 @@ export class World {
       this.group.remove(child);
     });
     
-    console.log(`🗑️ ${childrenToRemove.length} éléments supprimés`);
   }
 
   private async buildMapFromServerData() {
     if (!this.mapData) return;
 
-    console.log("🏗️ Construction de la carte depuis les données serveur...");
-    
     const elements = this.mapData.elements;
-    console.log(
-      `📊 Construction de ${elements.length} éléments: ${elements.filter(e => e.type === 'road').length} routes, ${elements.filter(e => e.type === 'ground').length} sols`
-    );
     
     for (const element of elements) {
       if (element.type === 'road') {
-        console.log(`🛣️ Création d'une route à la position:`, element.position);
         const road = await this.roadManager.createComplexRoad(element);
         this.group.add(road);
-        console.log(`✅ Route ajoutée au monde. Position finale:`, {
-          x: road.position.x,
-          y: road.position.y,
-          z: road.position.z
-        });
       } else if (element.type === 'ground') {
         const ground = this.groundManager.createComplexGround(element);
         this.group.add(ground);
+      } else if (element.type === 'streetlight') {
+        const streetlight = this.roadManager.createStreetlight(element);
+        this.group.add(streetlight);
+      } else if (element.type === 'building') {
+        const building = this.roadManager.createBuilding(element);
+        this.group.add(building);
       }
     }
-    
-    console.log(`✅ Carte construite avec ${elements.length} éléments: ${elements.filter(e => e.type === 'road').length} routes, ${elements.filter(e => e.type === 'ground').length} sols`);
   }
 
   // Méthodes de debug et test
