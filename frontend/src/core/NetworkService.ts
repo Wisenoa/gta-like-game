@@ -8,7 +8,7 @@ export class NetworkService {
     private playerName = '';
     private networkConfig: NetworkConfig;
     private sessionManager: SessionManager;
-    private reconnectTimeout: NodeJS.Timeout | null = null;
+    private reconnectTimeout: number | null = null;
     private eventListenersSetup = false;
     
     // Callbacks pour les événements de jeu
@@ -238,7 +238,16 @@ export class NetworkService {
         
         this.socket.on('mapData', (data) => {
             console.log('📨 Événement mapData reçu:', data);
+            console.log('📊 Nombre d\'éléments dans mapData:', data?.elements?.length || 0);
+            if (data?.elements) {
+                console.log('🔍 Premiers éléments:', data.elements.slice(0, 3));
+            }
             this.mapDataCallback?.(data);
+        });
+        
+        // Log tous les événements reçus pour le debug
+        this.socket.onAny((eventName, ...args) => {
+            console.log(`📨 Événement reçu: ${eventName}`, args);
         });
         
         console.log('✅ Écouteurs Socket.io configurés');
@@ -257,8 +266,18 @@ export class NetworkService {
     isSessionValid() {
         return this.sessionManager.hasValidSession();
     }
-
+    
     getSocket() {
         return this.socket;
+    }
+    
+    // Méthode pour demander les données de carte au serveur
+    requestMapData() {
+        if (this.socket && this.socket.connected) {
+            console.log("📤 Demande des données de carte au serveur...");
+            this.socket.emit('requestMapData');
+        } else {
+            console.error("❌ Socket non connecté, impossible de demander les données de carte");
+        }
     }
 }

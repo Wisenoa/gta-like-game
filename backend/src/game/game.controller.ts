@@ -44,10 +44,15 @@ export class GameController {
   }
 
   @Post('map/regenerate')
-  regenerateMap() {
-    const result = this.mapService.regenerateMap();
-    // Diffuser la nouvelle carte à tous les joueurs connectés
+  async regenerateMap() {
+    const newMapData = await this.mapService.forceRegenerateMap();
+    
+    // Notifier tous les clients connectés de la nouvelle carte
     this.gameGateway.broadcastMapData();
-    return result;
+    
+    return { 
+      message: 'Map regenerated successfully', 
+      elementsCount: newMapData.elements.length 
+    };
   }
 }

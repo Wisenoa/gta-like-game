@@ -2,7 +2,6 @@ import {
   Injectable,
   Logger,
   ConflictException,
-  NotFoundException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { Player as PrismaPlayer } from '@prisma/client';

@@ -127,8 +127,8 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
         this.server.emit('serverNotification', joinNotification);
 
         // Envoyer la liste des joueurs existants
-        const existingPlayers = this.roomService
-          .getRoomPlayers(room.id)
+        const existingPlayers = this.playerService
+          .getAllPlayers()
           .filter((p) => p.id !== player.id);
         this.logger.log(
           `📤 Envoi existingPlayers au client ${client.id}:`,
@@ -203,11 +203,27 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
     client.emit('playersList', players);
   }
 
+  @SubscribeMessage('requestMapData')
+  handleRequestMapData(@ConnectedSocket() client: Socket) {
+    try {
+      const mapData = this.mapService.getMapData();
+      this.logger.log(
+        `🗺️ Envoi de la carte au joueur qui l'a demandée:`,
+        mapData,
+      );
+      client.emit('mapData', mapData);
+    } catch (error) {
+      this.logger.error(`❌ Erreur lors de l'envoi de la carte:`, error);
+    }
+  }
+
   // Méthode pour envoyer la carte à tous les joueurs connectés
   broadcastMapData() {
     try {
       const mapData = this.mapService.getMapData();
-      this.logger.log('🗺️ Diffusion de la nouvelle carte à tous les joueurs connectés');
+      this.logger.log(
+        '🗺️ Diffusion de la nouvelle carte à tous les joueurs connectés',
+      );
       this.server.emit('mapData', mapData);
     } catch (error) {
       this.logger.error('❌ Erreur lors de la diffusion de la carte:', error);

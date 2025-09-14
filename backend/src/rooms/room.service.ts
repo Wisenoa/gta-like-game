@@ -47,18 +47,4 @@ export class RoomService {
     room.players.set(playerId, playerData);
     return true;
   }
-
-  removePlayerFromRoom(roomId: string, playerId: string): boolean {
-    const room = this.rooms.get(roomId);
-    if (!room) return false;
-
-    return room.players.delete(playerId);
-  }
-
-  getRoomPlayers(roomId: string): any[] {
-    const room = this.rooms.get(roomId);
-    if (!room) return [];
-
-    return Array.from(room.players.values());
-  }
 }

@@ -1,6 +1,11 @@
 import * as THREE from 'three';
 
 export class Game {
+    scene: THREE.Scene | null;
+    camera: THREE.PerspectiveCamera | null;
+    renderer: THREE.WebGLRenderer | null;
+    clock: THREE.Clock;
+    
     constructor() {
         this.scene = null;
         this.camera = null;
@@ -8,7 +13,9 @@ export class Game {
         this.clock = new THREE.Clock();
     }
     
-    async init() {
+    init() {
+        console.log('🎮 Initialisation du jeu...');
+        
         // Créer la scène
         this.scene = new THREE.Scene();
         this.scene.background = new THREE.Color(0x87CEEB); // Ciel bleu
@@ -33,22 +40,29 @@ export class Game {
         this.renderer.toneMappingExposure = 1;
         
         // Ajouter le renderer au DOM
-        document.getElementById('gameContainer').appendChild(this.renderer.domElement);
+        const gameContainer = document.getElementById('gameContainer');
+        if (gameContainer) {
+            gameContainer.appendChild(this.renderer.domElement);
+        } else {
+            console.error('❌ Élément gameContainer non trouvé !');
+        }
         
         // Gérer le redimensionnement
         window.addEventListener('resize', () => this.onWindowResize());
         
         // Ajouter l'éclairage
         this.setupLighting();
+        
+        console.log('✅ Jeu initialisé avec succès');
     }
     
     setupLighting() {
-        // Lumière ambiante plus forte
-        const ambientLight = new THREE.AmbientLight(0x404040, 1.2);
+        // Lumière ambiante plus forte pour voir les textures
+        const ambientLight = new THREE.AmbientLight(0x606060, 2.0);
         this.scene.add(ambientLight);
         
         // Lumière directionnelle (soleil) plus forte
-        const directionalLight = new THREE.DirectionalLight(0xffffff, 1.5);
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 2.0);
         directionalLight.position.set(50, 50, 50);
         directionalLight.castShadow = true;
         directionalLight.shadow.mapSize.width = 2048;

@@ -16,6 +16,9 @@ export class InputManager {
         // Callback pour le mode debug
         this.debugCallback = null;
         
+        // Callback pour afficher les positions des routes
+        this.roadPositionsCallback = null;
+        
         this.setupEventListeners();
     }
     
@@ -29,6 +32,14 @@ export class InputManager {
                 event.preventDefault();
                 if (this.debugCallback) {
                     this.debugCallback();
+                }
+            }
+            
+            // Gestion de la touche pour afficher les positions des routes (O)
+            if (event.code === 'KeyO') {
+                event.preventDefault();
+                if (this.roadPositionsCallback) {
+                    this.roadPositionsCallback();
                 }
             }
             
@@ -117,5 +128,9 @@ export class InputManager {
     
     setDebugCallback(callback) {
         this.debugCallback = callback;
+    }
+    
+    setRoadPositionsCallback(callback) {
+        this.roadPositionsCallback = callback;
     }
 }
