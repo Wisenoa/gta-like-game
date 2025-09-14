@@ -87,6 +87,8 @@
 					this.loadedChunks = new Map(); // Map des chunks chargés
 					this.chunkGroups = new Map(); // Map des groupes de chunks
 					this.needsOctreeUpdate = false; // Flag pour optimiser la reconstruction de l'Octree
+					this.modifiedChunks = new Set(); // Set des chunks qui ont été modifiés
+					this.octreeChunks = new Map(); // Map des chunks déjà dans l'Octree
 				}
 
 				/**
@@ -229,6 +231,12 @@
 					setTimeout(() => {
 						this.needsOctreeUpdate = true;
 						this.updateOctreeIfNeeded();
+						
+						// Marquer tous les chunks initiaux comme étant dans l'Octree
+						for (const chunkKey of this.chunkGroups.keys()) {
+							this.octreeChunks.set(chunkKey, true);
+						}
+						
 						console.log('Octree initial reconstruit après chargement des chunks');
 					}, 100);
 					
@@ -374,7 +382,8 @@
 					this.loadedChunks.set(chunkKey, true);
 					this.chunkGroups.set(chunkKey, chunkGroup);
 					
-					// Ne pas reconstruire l'Octree immédiatement - le faire en batch
+					// Marquer ce chunk comme modifié pour l'Octree partielle
+					this.modifiedChunks.add(chunkKey);
 					this.needsOctreeUpdate = true;
 					
 					console.log(`Chunk chargé: ${chunkKey} (${chunkGroup.children.length} blocs)`);
@@ -406,6 +415,11 @@
 							this.worldGroup.remove(chunkGroup);
 							this.loadedChunks.delete(chunkKey);
 							this.chunkGroups.delete(chunkKey);
+							
+							// Marquer ce chunk comme modifié (déchargé)
+							this.modifiedChunks.add(chunkKey);
+							this.octreeChunks.delete(chunkKey);
+							
 							console.log(`Chunk déchargé: ${chunkKey}`);
 						});
 						
@@ -419,10 +433,98 @@
 				 */
 				updateOctreeIfNeeded() {
 					if (this.needsOctreeUpdate) {
-						// Reconstruire l'Octree seulement si nécessaire
+						// Attendre 1 frame avant de reconstruire pour éviter le freeze
+						requestAnimationFrame(() => {
+							this.updateOctreePartially();
+							this.needsOctreeUpdate = false;
+						});
+					}
+				}
+
+				/**
+				 * Met à jour l'Octree de manière partielle (seulement les chunks modifiés)
+				 */
+				updateOctreePartially() {
+					if (this.modifiedChunks.size === 0) {
+						return; // Rien à mettre à jour
+					}
+
+					console.log(`Mise à jour partielle de l'Octree: ${this.modifiedChunks.size} chunks modifiés`);
+
+					// Option 1: Reconstruction complète (plus simple, mais moins efficace)
+					// this.worldOctree.fromGraphNode(this.worldGroup);
+
+					// Option 2: Reconstruction partielle (plus efficace)
+					this.rebuildOctreeForModifiedChunks();
+
+					// Nettoyer la liste des chunks modifiés
+					this.modifiedChunks.clear();
+				}
+
+				/**
+				 * Reconstruit l'Octree seulement pour les chunks modifiés
+				 */
+				rebuildOctreeForModifiedChunks() {
+					let chunksAdded = 0;
+					let chunksRemoved = 0;
+					
+					// Traiter chaque chunk modifié
+					for (const chunkKey of this.modifiedChunks) {
+						const chunkGroup = this.chunkGroups.get(chunkKey);
+						const isInOctree = this.octreeChunks.has(chunkKey);
+						
+						if (chunkGroup && !isInOctree) {
+							// Chunk chargé mais pas dans l'Octree -> l'ajouter
+							this.addChunkToOctree(chunkGroup, chunkKey);
+							chunksAdded++;
+						} else if (!chunkGroup && isInOctree) {
+							// Chunk déchargé mais encore dans l'Octree -> le supprimer
+							this.removeChunkFromOctree(chunkKey);
+							chunksRemoved++;
+						}
+					}
+					
+					// Si trop de modifications, faire une reconstruction complète
+					if (chunksAdded + chunksRemoved > 3) {
+						console.log(`Trop de modifications (${chunksAdded + chunksRemoved}), reconstruction complète`);
 						this.worldOctree.fromGraphNode(this.worldGroup);
-						this.needsOctreeUpdate = false;
-						console.log('Octree mis à jour');
+						
+						// Mettre à jour le tracking
+						this.octreeChunks.clear();
+						for (const chunkKey of this.chunkGroups.keys()) {
+							this.octreeChunks.set(chunkKey, true);
+						}
+					} else {
+						console.log(`Octree partiel: +${chunksAdded} chunks, -${chunksRemoved} chunks`);
+					}
+				}
+
+				/**
+				 * Ajoute un chunk à l'Octree
+				 */
+				addChunkToOctree(chunkGroup, chunkKey) {
+					// Ajouter le chunk à l'Octree
+					this.worldOctree.fromGraphNode(chunkGroup);
+					this.octreeChunks.set(chunkKey, true);
+					console.log(`Chunk ajouté à l'Octree: ${chunkKey}`);
+				}
+
+				/**
+				 * Supprime un chunk de l'Octree
+				 */
+				removeChunkFromOctree(chunkKey) {
+					// Note: Three.js Octree ne permet pas de supprimer des éléments spécifiques
+					// On doit faire une reconstruction complète pour les suppressions
+					console.log(`Chunk supprimé de l'Octree: ${chunkKey}`);
+					this.octreeChunks.delete(chunkKey);
+					
+					// Reconstruction complète nécessaire pour les suppressions
+					this.worldOctree.fromGraphNode(this.worldGroup);
+					
+					// Mettre à jour le tracking
+					this.octreeChunks.clear();
+					for (const chunkKey of this.chunkGroups.keys()) {
+						this.octreeChunks.set(chunkKey, true);
 					}
 				}
 
