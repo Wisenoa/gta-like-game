@@ -1,240 +1,677 @@
 <!DOCTYPE html>
-<html lang="fr">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GTA-Like Game</title>
-    <style>
-        body {
-            margin: 0;
-            padding: 0;
-            background: #000;
-            font-family: Arial, sans-serif;
-            overflow: hidden;
-        }
-        
-        #gameContainer {
-            position: relative;
-            width: 100vw;
-            height: 100vh;
-        }
-        
-        #ui {
-            position: absolute;
-            top: 0;
-            left: 0;
-            z-index: 100;
-            color: white;
-            padding: 20px;
-            pointer-events: none;
-        }
-        
-        #crosshair {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            width: 20px;
-            height: 20px;
-            border: 2px solid white;
-            border-radius: 50%;
-            pointer-events: none;
-        }
-        
-        #instructions {
-            position: absolute;
-            bottom: 20px;
-            left: 20px;
-            color: white;
-            font-size: 14px;
-            opacity: 0.8;
-        }
-        
-        @keyframes shake {
-            0%, 100% { transform: translateX(0); }
-            25% { transform: translateX(-5px); }
-            75% { transform: translateX(5px); }
-        }
-        
-        #loading {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            color: white;
-            font-size: 18px;
-        }
-        
-        /* Écran de mort */
-        #death-screen {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: linear-gradient(135deg, #1a1a1a, #2d2d2d);
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            z-index: 10000;
-            font-family: Arial, sans-serif;
-        }
-        
-        .death-content {
-            text-align: center;
-            color: white;
-            padding: 40px;
-            border-radius: 20px;
-            background: rgba(0, 0, 0, 0.8);
-            border: 2px solid #ff4444;
-            box-shadow: 0 0 50px rgba(255, 68, 68, 0.5);
-            animation: deathPulse 2s ease-in-out infinite;
-        }
-        
-        @keyframes deathPulse {
-            0%, 100% { transform: scale(1); }
-            50% { transform: scale(1.05); }
-        }
-        
-        .death-title {
-            font-size: 3em;
-            margin: 0 0 20px 0;
-            color: #ff4444;
-            text-shadow: 0 0 20px rgba(255, 68, 68, 0.8);
-            animation: deathGlow 1.5s ease-in-out infinite alternate;
-        }
-        
-        @keyframes deathGlow {
-            from { text-shadow: 0 0 20px rgba(255, 68, 68, 0.8); }
-            to { text-shadow: 0 0 30px rgba(255, 68, 68, 1); }
-        }
-        
-        .death-message {
-            font-size: 1.5em;
-            margin: 0 0 30px 0;
-            color: #cccccc;
-        }
-        
-        .death-stats {
-            background: rgba(255, 255, 255, 0.1);
-            padding: 20px;
-            border-radius: 10px;
-            margin: 20px 0;
-        }
-        
-        .death-stats p {
-            margin: 10px 0;
-            font-size: 1.2em;
-        }
-        
-        .death-options {
-            margin: 30px 0;
-        }
-        
-        .death-button {
-            background: linear-gradient(45deg, #ff4444, #cc0000);
-            color: white;
-            border: none;
-            padding: 15px 30px;
-            margin: 0 10px;
-            border-radius: 10px;
-            font-size: 1.2em;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            box-shadow: 0 4px 15px rgba(255, 68, 68, 0.3);
-        }
-        
-        .death-button:hover {
-            transform: translateY(-3px);
-            box-shadow: 0 6px 20px rgba(255, 68, 68, 0.5);
-        }
-        
-        .death-instruction {
-            font-size: 1em;
-            color: #888;
-            margin-top: 20px;
-            font-style: italic;
-        }
-    </style>
-</head>
-<body>
-    <div id="gameContainer">
-        <div id="loading">Chargement du jeu...</div>
-        <div id="ui" style="display: none;">
-            <h2>GTA-Like Game</h2>
-            <div>FPS: <span id="fps">0</span></div>
-            <div>Position: <span id="position">0, 0, 0</span></div>
-            <div>Joueurs connectés: <span id="players">1</span></div>
-            <div>Stamina: <span id="stamina">100</span>%</div>
-            <div>Sensibilité: <span id="sensitivity">1.0</span> (+/- pour ajuster, 0 pour reset)</div>
-            <div>Santé: <span id="health">100</span>%</div>
-            <div id="health-bar-container" style="width: 200px; height: 20px; background: #333; border: 2px solid #666; margin-top: 5px;">
-                <div id="health-bar" style="width: 100%; height: 100%; background: linear-gradient(90deg, #4CAF50, #8BC34A); transition: width 0.3s ease;"></div>
-            </div>
-            <div style="margin-top: 10px;">
-                <button id="regenerate-map-btn" style="background: linear-gradient(45deg, #4CAF50, #45a049); color: white; border: none; padding: 8px 16px; border-radius: 5px; cursor: pointer; font-size: 14px; margin-right: 10px;">
-                    🌍 Régénérer Map
-                </button>
-                <span id="map-status" style="color: #4CAF50; font-size: 12px;">Map chargée</span>
-            </div>
-        </div>
-        <div id="death-screen" style="display: none;">
-            <div class="death-content">
-                <h1 class="death-title">💀 VOUS ÊTES MORT 💀</h1>
-                <p class="death-message">Votre santé a atteint 0 HP</p>
-                <div class="death-stats">
-                    <p>Temps de survie: <span id="survival-time">0</span> secondes</p>
-                    <p>Position finale: <span id="death-position">0, 0, 0</span></p>
-                </div>
-                <div class="death-options">
-                    <button id="respawn-btn" class="death-button">🔄 Ressusciter</button>
-                    <button id="spectate-btn" class="death-button">👁️ Spectateur</button>
-                </div>
-                <p class="death-instruction">Appuyez sur R pour ressusciter ou S pour le mode spectateur</p>
-            </div>
-        </div>
-        <div id="crosshair"></div>
-        <div id="instructions">
-            <div>WASD - Se déplacer</div>
-            <div>Souris - Regarder autour</div>
-            <div>Espace - Sauter</div>
-            <div>Shift - Sprint (consomme stamina)</div>
-            <div>Clic - Verrouiller curseur</div>
-            <div>H - Soigner (+10 HP)</div>
-            <div>J - Dégâts (-20 HP)</div>
-            <div>K - Ressusciter</div>
-            <div>R - Ressusciter (écran de mort)</div>
-            <div>S - Mode spectateur (écran de mort)</div>
-            <div>P - Mode debug (afficher les noms d'éléments)</div>
-        <div>T - Créer joueur de test</div>
-        <div>Y - Supprimer tous les joueurs de test</div>
-        <div>Entrée - Ouvrir le chat</div>
-    </div>
-    
-    <!-- Chat -->
-    <div id="chat-container" style="position: fixed; bottom: 20px; left: 20px; width: 400px; height: 300px; background: rgba(0, 0, 0, 0.8); border: 2px solid #666; border-radius: 10px; display: none; flex-direction: column; font-family: Arial, sans-serif;">
-        <div id="chat-header" style="background: #333; padding: 10px; border-radius: 8px 8px 0 0; color: white; font-weight: bold;">
-            💬 Chat du jeu
-        </div>
-        <div id="chat-messages" style="flex: 1; padding: 10px; overflow-y: auto; color: white; font-size: 14px;">
-            <div style="color: #4CAF50; font-style: italic;">Bienvenue dans le chat !</div>
-        </div>
-        <div id="chat-input-container" style="padding: 10px; border-top: 1px solid #666;">
-            <input type="text" id="chat-input" placeholder="Tapez votre message..." style="width: 100%; padding: 8px; border: 1px solid #666; border-radius: 5px; background: #222; color: white; font-size: 14px;" />
-        </div>
-    </div>
-    
-    <!-- Indicateur de chat -->
-    <div id="chat-indicator" style="position: fixed; bottom: 20px; left: 20px; background: rgba(0, 0, 0, 0.7); color: white; padding: 10px; border-radius: 5px; font-size: 12px; display: none;">
-        💬 Appuyez sur Entrée pour ouvrir le chat
-    </div>
-    
-    <!-- Notifications de chat -->
-    <div id="chat-notifications" style="position: fixed; bottom: 80px; left: 20px; width: 400px; max-height: 200px; overflow: hidden; pointer-events: none;">
-        <!-- Les notifications apparaîtront ici -->
-    </div>
-</div>
-    
-    <script type="module" src="/src/main.ts"></script>
-</body>
+<html lang="en">
+	<head>
+		<title>Minecraft-like World - Block Collisions</title>
+		<meta charset=utf-8 />
+		<meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
+		<link type="text/css" rel="stylesheet" href="main.css">
+		<style>
+			body {
+				margin: 0;
+				padding: 0;
+				overflow: hidden; /* Empêche le scroll */
+			}
+			#container {
+				width: 100vw;
+				height: 100vh;
+				position: relative;
+			}
+		</style>
+	</head>
+	<body>
+		<div id="info">
+			Minecraft-like World - Block Collisions with Octree<br />
+			MOUSE to look around and to throw balls<br/>
+			WASD to move and SPACE to jump<br/>
+			World: 30x30 blocks with height
+		</div>
+		<div id="container"></div>
+
+		<script type="importmap">
+			{
+				"imports": {
+					"three": "../build/three.module.js",
+					"three/addons/": "./jsm/"
+				}
+			}
+		</script>
+
+		<script type="module">
+
+			import * as THREE from 'three';
+
+			import Stats from 'three/addons/libs/stats.module.js';
+
+
+			import { Octree } from 'three/addons/math/Octree.js';
+			import { OctreeHelper } from 'three/addons/helpers/OctreeHelper.js';
+
+			import { Capsule } from 'three/addons/math/Capsule.js';
+
+			import { GUI } from 'three/addons/libs/lil-gui.module.min.js';
+
+			// Classe WorldGenerator intégrée directement
+			class WorldGenerator {
+				constructor() {
+					this.WORLD_SIZE = 30; // 30x30 blocs (agrandi progressivement)
+					this.BLOCK_SIZE = 1;
+					this.BLOCK_HEIGHT = 1;
+					this.MAX_HEIGHT = 3; // Hauteur maximale pour tester le culling
+					
+					// Géométrie simple et efficace
+					this.blockGeometry = new THREE.BoxGeometry(this.BLOCK_SIZE, this.BLOCK_HEIGHT, this.BLOCK_SIZE);
+					
+					// Matériau partagé pour tous les blocs
+					this.blockMaterial = new THREE.MeshLambertMaterial({ color: 0x8B4513 }); // Couleur terre
+				}
+
+				/**
+				 * Crée le monde de blocs Minecraft
+				 * @param {THREE.Scene} scene - La scène Three.js
+				 * @param {Octree} worldOctree - L'Octree pour les collisions
+				 * @returns {THREE.Group} Le groupe contenant tous les blocs
+				 */
+				createMinecraftWorld(scene, worldOctree) {
+					const worldGroup = new THREE.Group();
+					
+					// Créer une map 2D pour détecter les voisins
+					const blockMap = new Array(this.WORLD_SIZE).fill(null).map(() => new Array(this.WORLD_SIZE).fill(null).map(() => new Array(this.MAX_HEIGHT).fill(false)));
+					
+					// Marquer tous les blocs comme présents
+					for (let x = 0; x < this.WORLD_SIZE; x++) {
+						for (let z = 0; z < this.WORLD_SIZE; z++) {
+							const height = this.getBlockHeight(x, z);
+							for (let y = 0; y < height; y++) {
+								blockMap[x][z][y] = true;
+							}
+						}
+					}
+					
+					// Créer des meshes individuels avec culling des faces cachées
+					for (let x = 0; x < this.WORLD_SIZE; x++) {
+						for (let z = 0; z < this.WORLD_SIZE; z++) {
+							const height = this.getBlockHeight(x, z);
+							
+							for (let y = 0; y < height; y++) {
+								const blockX = (x - this.WORLD_SIZE / 2) * this.BLOCK_SIZE;
+								const blockZ = (z - this.WORLD_SIZE / 2) * this.BLOCK_SIZE;
+								const blockY = y * this.BLOCK_HEIGHT;
+								
+								// Créer une géométrie optimisée pour ce bloc
+								const optimizedGeometry = this.createOptimizedBlockGeometry(x, y, z, blockMap);
+								
+								// Créer le mesh du bloc
+								const blockMesh = new THREE.Mesh(optimizedGeometry, this.blockMaterial);
+								blockMesh.position.set(blockX, blockY, blockZ);
+								blockMesh.castShadow = false;
+								blockMesh.receiveShadow = false;
+								
+								// Ajouter le bloc au groupe
+								worldGroup.add(blockMesh);
+							}
+						}
+					}
+					
+					// Ajouter le monde à la scène
+					scene.add(worldGroup);
+					
+					// Construire l'Octree à partir du monde de blocs
+					worldOctree.fromGraphNode(worldGroup);
+					
+					const totalBlocks = worldGroup.children.length;
+					console.log(`Monde Minecraft créé avec ${totalBlocks} blocs (avec culling des faces cachées)`);
+					
+					return worldGroup;
+				}
+
+
+				/**
+				 * Détermine la hauteur d'un bloc à une position donnée
+				 * @param {number} x - Position X
+				 * @param {number} z - Position Z
+				 * @returns {number} Hauteur du bloc (nombre de niveaux)
+				 */
+				getBlockHeight(x, z) {
+					// Créer une structure intéressante pour tester le culling
+					const centerX = this.WORLD_SIZE / 2;
+					const centerZ = this.WORLD_SIZE / 2;
+					const distanceFromCenter = Math.sqrt((x - centerX) ** 2 + (z - centerZ) ** 2);
+					
+					// Structure en pyramide inversée
+					if (distanceFromCenter < 3) {
+						return this.MAX_HEIGHT; // Hauteur maximale au centre
+					} else if (distanceFromCenter < 6) {
+						return 2; // Hauteur moyenne
+					} else if (distanceFromCenter < 9) {
+						return 1; // Hauteur minimale
+					}
+					
+					return 1; // Hauteur de base partout ailleurs
+				}
+
+				/**
+				 * Crée une géométrie optimisée avec seulement les faces visibles
+				 * @param {number} x - Position X du bloc
+				 * @param {number} y - Position Y du bloc
+				 * @param {number} z - Position Z du bloc
+				 * @param {Array} blockMap - Map 3D des blocs existants
+				 * @returns {THREE.BufferGeometry} Géométrie optimisée
+				 */
+				createOptimizedBlockGeometry(x, y, z, blockMap) {
+					const geometry = new THREE.BufferGeometry();
+					const vertices = [];
+					const normals = [];
+					const uvs = [];
+					const indices = [];
+
+					const s = this.BLOCK_SIZE / 2; // demi-taille du bloc
+					let vertexIndex = 0;
+
+					// Vérifier les voisins pour déterminer quelles faces sont visibles
+					const hasNeighbor = {
+						north: z > 0 && blockMap[x][z - 1][y],           // Z-
+						south: z < this.WORLD_SIZE - 1 && blockMap[x][z + 1][y], // Z+
+						east: x < this.WORLD_SIZE - 1 && blockMap[x + 1][z][y],  // X+
+						west: x > 0 && blockMap[x - 1][z][y],                     // X-
+						top: y < this.MAX_HEIGHT - 1 && blockMap[x][z][y + 1],   // Y+
+						bottom: y > 0 && blockMap[x][z][y - 1]                    // Y-
+					};
+
+					// Définir les faces du cube avec leurs normales
+					const faces = [
+						// Face avant (Z+) - sud
+						{ vertices: [[-s, -s, s], [s, -s, s], [s, s, s], [-s, s, s]], normal: [0, 0, 1], visible: !hasNeighbor.south },
+						// Face arrière (Z-) - nord
+						{ vertices: [[s, -s, -s], [-s, -s, -s], [-s, s, -s], [s, s, -s]], normal: [0, 0, -1], visible: !hasNeighbor.north },
+						// Face droite (X+) - est
+						{ vertices: [[s, -s, s], [s, -s, -s], [s, s, -s], [s, s, s]], normal: [1, 0, 0], visible: !hasNeighbor.east },
+						// Face gauche (X-) - ouest
+						{ vertices: [[-s, -s, -s], [-s, -s, s], [-s, s, s], [-s, s, -s]], normal: [-1, 0, 0], visible: !hasNeighbor.west },
+						// Face haut (Y+)
+						{ vertices: [[-s, s, s], [s, s, s], [s, s, -s], [-s, s, -s]], normal: [0, 1, 0], visible: !hasNeighbor.top },
+						// Face bas (Y-)
+						{ vertices: [[-s, -s, -s], [s, -s, -s], [s, -s, s], [-s, -s, s]], normal: [0, -1, 0], visible: !hasNeighbor.bottom }
+					];
+
+					faces.forEach(face => {
+						if (face.visible) {
+							// Ajouter les vertices
+							face.vertices.forEach(vertex => {
+								vertices.push(...vertex);
+								normals.push(...face.normal);
+							});
+
+							// Ajouter les UVs (coordonnées de texture)
+							uvs.push(0, 0, 1, 0, 1, 1, 0, 1);
+
+							// Ajouter les indices pour former 2 triangles
+							indices.push(
+								vertexIndex, vertexIndex + 1, vertexIndex + 2,
+								vertexIndex, vertexIndex + 2, vertexIndex + 3
+							);
+							vertexIndex += 4;
+						}
+					});
+
+					geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
+					geometry.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3));
+					geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+					geometry.setIndex(indices);
+
+					return geometry;
+				}
+			}
+
+			const clock = new THREE.Clock();
+
+			const scene = new THREE.Scene();
+			scene.background = new THREE.Color( 0x88ccee );
+			// scene.fog = new THREE.Fog( 0x88ccee, 0, 50 ); // Désactivé pour les performances
+
+			const camera = new THREE.PerspectiveCamera( 70, window.innerWidth / window.innerHeight, 0.1, 1000 );
+			camera.rotation.order = 'YXZ';
+
+			// const fillLight1 = new THREE.HemisphereLight( 0x8dc1de, 0x00668d, 1.0 ); // Intensité réduite
+			// fillLight1.position.set( 2, 1, 1 );
+			// scene.add( fillLight1 );
+
+			const directionalLight = new THREE.DirectionalLight( 0xffffff, 1.5 ); // Intensité réduite
+			directionalLight.position.set( - 5, 25, - 1 );
+			directionalLight.castShadow = false; // Désactivé par défaut pour les performances
+			directionalLight.shadow.camera.near = 0.01;
+			directionalLight.shadow.camera.far = 50; // Portée réduite (était 500)
+			directionalLight.shadow.camera.right = 15; // Zone réduite (était 30)
+			directionalLight.shadow.camera.left = - 15; // Zone réduite (était -30)
+			directionalLight.shadow.camera.top	= 15; // Zone réduite (était 30)
+			directionalLight.shadow.camera.bottom = - 15; // Zone réduite (était -30)
+			directionalLight.shadow.mapSize.width = 256; // Encore plus réduit (était 512)
+			directionalLight.shadow.mapSize.height = 256; // Encore plus réduit (était 512)
+			directionalLight.shadow.radius = 1; // Encore plus réduit (était 2)
+			directionalLight.shadow.bias = - 0.0001; // Ajusté pour la résolution réduite
+			scene.add( directionalLight );
+
+			const container = document.getElementById( 'container' );
+
+			const renderer = new THREE.WebGLRenderer( { antialias: true } );
+			renderer.setPixelRatio( Math.min(window.devicePixelRatio, 2) ); // Limiter le pixel ratio
+			renderer.setSize( window.innerWidth, window.innerHeight );
+			renderer.setAnimationLoop( animate );
+			renderer.shadowMap.enabled = false; // Désactivé par défaut pour les performances
+			renderer.shadowMap.type = THREE.PCFSoftShadowMap; // Plus rapide que VSM
+			renderer.toneMapping = THREE.ACESFilmicToneMapping;
+			renderer.frustumCulled = true; // Activer le frustum culling
+			container.appendChild( renderer.domElement );
+
+			const stats = new Stats();
+			stats.domElement.style.position = 'absolute';
+			stats.domElement.style.top = '0px';
+			container.appendChild( stats.domElement );
+
+			const GRAVITY = 30;
+
+			const NUM_SPHERES = 20; // Réduit de 100 à 20 pour les performances
+			const SPHERE_RADIUS = 0.2;
+
+			const STEPS_PER_FRAME = 5;
+
+			const sphereGeometry = new THREE.IcosahedronGeometry( SPHERE_RADIUS, 2 ); // Réduit de 5 à 2 subdivisions
+			const sphereMaterial = new THREE.MeshLambertMaterial( { color: 0xdede8d } );
+
+			const spheres = [];
+			let sphereIdx = 0;
+
+			for ( let i = 0; i < NUM_SPHERES; i ++ ) {
+
+				const sphere = new THREE.Mesh( sphereGeometry, sphereMaterial );
+				sphere.castShadow = true;
+				sphere.receiveShadow = true;
+
+				scene.add( sphere );
+
+				spheres.push( {
+					mesh: sphere,
+					collider: new THREE.Sphere( new THREE.Vector3( 0, - 100, 0 ), SPHERE_RADIUS ),
+					velocity: new THREE.Vector3()
+				} );
+
+			}
+
+			const worldOctree = new Octree();
+
+			const playerCollider = new Capsule( new THREE.Vector3( 0, 10, 0 ), new THREE.Vector3( 0, 10.65, 0 ), 0.35 );
+
+			const playerVelocity = new THREE.Vector3();
+			const playerDirection = new THREE.Vector3();
+
+			let playerOnFloor = false;
+			let mouseTime = 0;
+
+			const keyStates = {};
+
+			const vector1 = new THREE.Vector3();
+			const vector2 = new THREE.Vector3();
+			const vector3 = new THREE.Vector3();
+
+			document.addEventListener( 'keydown', ( event ) => {
+
+				keyStates[ event.code ] = true;
+
+			} );
+
+			document.addEventListener( 'keyup', ( event ) => {
+
+				keyStates[ event.code ] = false;
+
+			} );
+
+			container.addEventListener( 'mousedown', () => {
+
+				document.body.requestPointerLock();
+
+				mouseTime = performance.now();
+
+			} );
+
+			document.addEventListener( 'mouseup', () => {
+
+				if ( document.pointerLockElement !== null ) throwBall();
+
+			} );
+
+			document.body.addEventListener( 'mousemove', ( event ) => {
+
+				if ( document.pointerLockElement === document.body ) {
+
+					camera.rotation.y -= event.movementX / 500;
+					camera.rotation.x -= event.movementY / 500;
+
+				}
+
+			} );
+
+			window.addEventListener( 'resize', onWindowResize );
+
+			function onWindowResize() {
+
+				camera.aspect = window.innerWidth / window.innerHeight;
+				camera.updateProjectionMatrix();
+
+				renderer.setSize( window.innerWidth, window.innerHeight );
+
+			}
+
+			function throwBall() {
+
+				const sphere = spheres[ sphereIdx ];
+
+				camera.getWorldDirection( playerDirection );
+
+				sphere.collider.center.copy( playerCollider.end ).addScaledVector( playerDirection, playerCollider.radius * 1.5 );
+
+				// throw the ball with more force if we hold the button longer, and if we move forward
+
+				const impulse = 15 + 30 * ( 1 - Math.exp( ( mouseTime - performance.now() ) * 0.001 ) );
+
+				sphere.velocity.copy( playerDirection ).multiplyScalar( impulse );
+				sphere.velocity.addScaledVector( playerVelocity, 2 );
+
+				sphereIdx = ( sphereIdx + 1 ) % spheres.length;
+
+			}
+
+			function playerCollisions() {
+
+				const result = worldOctree.capsuleIntersect( playerCollider );
+
+				playerOnFloor = false;
+
+				if ( result ) {
+
+					playerOnFloor = result.normal.y > 0;
+
+					if ( ! playerOnFloor ) {
+
+						playerVelocity.addScaledVector( result.normal, - result.normal.dot( playerVelocity ) );
+
+					}
+
+					if ( result.depth >= 1e-10 ) {
+
+						playerCollider.translate( result.normal.multiplyScalar( result.depth ) );
+
+					}
+
+				}
+
+			}
+
+			function updatePlayer( deltaTime ) {
+
+				let damping = Math.exp( - 4 * deltaTime ) - 1;
+
+				if ( ! playerOnFloor ) {
+
+					playerVelocity.y -= GRAVITY * deltaTime;
+
+					// small air resistance
+					damping *= 0.1;
+
+				}
+
+				playerVelocity.addScaledVector( playerVelocity, damping );
+
+				const deltaPosition = playerVelocity.clone().multiplyScalar( deltaTime );
+				playerCollider.translate( deltaPosition );
+
+				playerCollisions();
+
+				camera.position.copy( playerCollider.end );
+
+			}
+
+			function playerSphereCollision( sphere ) {
+
+				const center = vector1.addVectors( playerCollider.start, playerCollider.end ).multiplyScalar( 0.5 );
+
+				const sphere_center = sphere.collider.center;
+
+				const r = playerCollider.radius + sphere.collider.radius;
+				const r2 = r * r;
+
+				// approximation: player = 3 spheres
+
+				for ( const point of [ playerCollider.start, playerCollider.end, center ] ) {
+
+					const d2 = point.distanceToSquared( sphere_center );
+
+					if ( d2 < r2 ) {
+
+						const normal = vector1.subVectors( point, sphere_center ).normalize();
+						const v1 = vector2.copy( normal ).multiplyScalar( normal.dot( playerVelocity ) );
+						const v2 = vector3.copy( normal ).multiplyScalar( normal.dot( sphere.velocity ) );
+
+						playerVelocity.add( v2 ).sub( v1 );
+						sphere.velocity.add( v1 ).sub( v2 );
+
+						const d = ( r - Math.sqrt( d2 ) ) / 2;
+						sphere_center.addScaledVector( normal, - d );
+
+					}
+
+				}
+
+			}
+
+			function spheresCollisions() {
+
+				for ( let i = 0, length = spheres.length; i < length; i ++ ) {
+
+					const s1 = spheres[ i ];
+
+					for ( let j = i + 1; j < length; j ++ ) {
+
+						const s2 = spheres[ j ];
+
+						const d2 = s1.collider.center.distanceToSquared( s2.collider.center );
+						const r = s1.collider.radius + s2.collider.radius;
+						const r2 = r * r;
+
+						if ( d2 < r2 ) {
+
+							const normal = vector1.subVectors( s1.collider.center, s2.collider.center ).normalize();
+							const v1 = vector2.copy( normal ).multiplyScalar( normal.dot( s1.velocity ) );
+							const v2 = vector3.copy( normal ).multiplyScalar( normal.dot( s2.velocity ) );
+
+							s1.velocity.add( v2 ).sub( v1 );
+							s2.velocity.add( v1 ).sub( v2 );
+
+							const d = ( r - Math.sqrt( d2 ) ) / 2;
+
+							s1.collider.center.addScaledVector( normal, d );
+							s2.collider.center.addScaledVector( normal, - d );
+
+						}
+
+					}
+
+				}
+
+			}
+
+			function updateSpheres( deltaTime ) {
+
+				spheres.forEach( sphere => {
+
+					sphere.collider.center.addScaledVector( sphere.velocity, deltaTime );
+
+					const result = worldOctree.sphereIntersect( sphere.collider );
+
+					if ( result ) {
+
+						sphere.velocity.addScaledVector( result.normal, - result.normal.dot( sphere.velocity ) * 1.5 );
+						sphere.collider.center.add( result.normal.multiplyScalar( result.depth ) );
+
+					} else {
+
+						sphere.velocity.y -= GRAVITY * deltaTime;
+
+					}
+
+					const damping = Math.exp( - 1.5 * deltaTime ) - 1;
+					sphere.velocity.addScaledVector( sphere.velocity, damping );
+
+					playerSphereCollision( sphere );
+
+				} );
+
+				spheresCollisions();
+
+				for ( const sphere of spheres ) {
+
+					sphere.mesh.position.copy( sphere.collider.center );
+
+				}
+
+			}
+
+			function getForwardVector() {
+
+				camera.getWorldDirection( playerDirection );
+				playerDirection.y = 0;
+				playerDirection.normalize();
+
+				return playerDirection;
+
+			}
+
+			function getSideVector() {
+
+				camera.getWorldDirection( playerDirection );
+				playerDirection.y = 0;
+				playerDirection.normalize();
+				playerDirection.cross( camera.up );
+
+				return playerDirection;
+
+			}
+
+			function controls( deltaTime ) {
+
+				// gives a bit of air control
+				const speedDelta = deltaTime * ( playerOnFloor ? 25 : 8 );
+
+				if ( keyStates[ 'KeyW' ] ) {
+
+					playerVelocity.add( getForwardVector().multiplyScalar( speedDelta ) );
+
+				}
+
+				if ( keyStates[ 'KeyS' ] ) {
+
+					playerVelocity.add( getForwardVector().multiplyScalar( - speedDelta ) );
+
+				}
+
+				if ( keyStates[ 'KeyA' ] ) {
+
+					playerVelocity.add( getSideVector().multiplyScalar( - speedDelta ) );
+
+				}
+
+				if ( keyStates[ 'KeyD' ] ) {
+
+					playerVelocity.add( getSideVector().multiplyScalar( speedDelta ) );
+
+				}
+
+				if ( playerOnFloor ) {
+
+					if ( keyStates[ 'Space' ] ) {
+
+						playerVelocity.y = 15;
+
+					}
+
+				}
+
+			}
+
+			// Créer le générateur de monde
+			const worldGenerator = new WorldGenerator();
+
+			// Créer le monde
+			const worldMesh = worldGenerator.createMinecraftWorld(scene, worldOctree);
+
+			// Interface de debug
+			const helper = new OctreeHelper( worldOctree );
+			helper.visible = false;
+			scene.add( helper );
+
+			const gui = new GUI( { width: 200 } );
+			
+			// Contrôles de performance
+			const performanceControls = {
+				debug: false,
+				shadows: false, // Désactivé par défaut pour les performances
+				antialias: true
+			};
+			
+			gui.add( performanceControls, 'debug' )
+				.onChange( function ( value ) {
+					helper.visible = value;
+				} );
+			
+			gui.add( performanceControls, 'shadows' )
+				.onChange( function ( value ) {
+					renderer.shadowMap.enabled = value;
+					directionalLight.castShadow = value;
+				} );
+			
+			gui.add( performanceControls, 'antialias' )
+				.onChange( function ( value ) {
+					renderer.setPixelRatio( value ? Math.min(window.devicePixelRatio, 2) : 1 );
+				} );
+
+			function teleportPlayerIfOob() {
+
+				if ( camera.position.y <= - 25 ) {
+
+					playerCollider.start.set( 0, 10, 0 );
+					playerCollider.end.set( 0, 10.65, 0 );
+					playerCollider.radius = 0.35;
+					camera.position.copy( playerCollider.end );
+					camera.rotation.set( 0, 0, 0 );
+
+				}
+
+			}
+
+
+			function animate() {
+
+				const deltaTime = Math.min( 0.05, clock.getDelta() ) / STEPS_PER_FRAME;
+
+				// we look for collisions in substeps to mitigate the risk of
+				// an object traversing another too quickly for detection.
+
+				for ( let i = 0; i < STEPS_PER_FRAME; i ++ ) {
+
+					controls( deltaTime );
+
+					updatePlayer( deltaTime );
+
+					updateSpheres( deltaTime );
+
+					teleportPlayerIfOob();
+
+				}
+
+				renderer.render( scene, camera );
+
+				stats.update();
+
+			}
+
+		</script>
+	</body>
 </html>

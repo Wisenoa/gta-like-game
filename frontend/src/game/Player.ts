@@ -118,7 +118,7 @@ export class Player {
         // Mouvement simple (pas de friction complexe)
         this.moveSpeed = 12.0; // Vitesse encore plus rapide
         this.sprintSpeed = 18.0; // Vitesse de sprint (50% plus rapide)
-        this.jumpSpeed = 12.0; // Force de saut pour atteindre 1.2 bloc de haut
+        this.jumpSpeed = 15.0; // Force de saut pour sauter au-dessus d'un bloc
         this.gravity = -120.0; // Gravité ultra forte pour un mouvement instantané
         
         // Système de sprint et stamina
@@ -302,8 +302,8 @@ export class Player {
         const oldPos = this.position[axis];
         this.position[axis] += this.velocity[axis] * deltaTime;
         
-        // Vérifier les collisions pour cet axe
-        if (this.checkCollision()) {
+        // Vérifier les collisions pour cet axe spécifiquement
+        if (this.checkCollisionAxis(axis)) {
             // Collision détectée, annuler le mouvement
             this.position[axis] = oldPos;
             this.velocity[axis] = 0;
@@ -311,6 +311,8 @@ export class Player {
             // Si c'est l'axe Y et qu'on tombe, on est au sol
             if (axis === 'y' && this.velocity.y < 0) {
                 this.isGrounded = true;
+                // Repositionner proprement au-dessus du bloc
+                this.position.y = Math.floor(this.position.y) + 1;
             }
         }
     }
@@ -350,6 +352,31 @@ export class Player {
         return false; // Pas de collision
     }
     
+    // Vérification de collision par axe spécifique (pour éviter les blocages de saut)
+    checkCollisionAxis(axis: 'x' | 'y' | 'z'): boolean {
+        if (!this.blockManager) return false;
+        
+        // Pour l'axe Y (vertical), logique spéciale pour le saut
+        if (axis === 'y') {
+            if (this.velocity.y > 0) {
+                // En montant (saut), vérifier seulement les blocs au niveau des pieds
+                const feetY = this.position.y - 0.1;
+                const blockAtFeet = this.blockManager.getBlockAt(this.position.x, feetY, this.position.z);
+                return blockAtFeet && blockAtFeet !== 'air';
+            } else {
+                // En descendant, vérifier seulement les pieds
+                const feetY = this.position.y - 0.1;
+                const blockAtFeet = this.blockManager.getBlockAt(this.position.x, feetY, this.position.z);
+                return blockAtFeet && blockAtFeet !== 'air';
+            }
+        }
+        
+        // Pour les axes X et Z, désactiver la collision pour éviter le glissement
+        if (axis === 'x' || axis === 'z') {
+            return false; // Pas de collision horizontale
+        }
+    }
+    
     // Vérifier si le joueur est au sol
     checkGrounded() {
         if (!this.blockManager) {
@@ -359,7 +386,7 @@ export class Player {
         }
         
         // Vérifier s'il y a un bloc sous les pieds
-        const feetY = this.position.y - 0.1; // Légèrement sous les pieds
+        const feetY = this.position.y - 0.5; // Plus bas pour détecter le sol
         const blockUnderFeet = this.blockManager.getBlockAt(
             this.position.x, 
             feetY, 
