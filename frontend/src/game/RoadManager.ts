@@ -104,13 +104,13 @@ export class RoadManager {
   }
 
   private addDebugBoundingBox(element: MapElement, roadInstance: THREE.Group): void {
-    // Créer une boîte de debug avec les dimensions du serveur
-    const expectedLength = element.scale.x; // 18.95
-    const expectedWidth = element.scale.z;  // 12.98
-    const expectedHeight = element.scale.y; // 0.03
+    // Créer une boîte de debug avec les dimensions exactes du serveur
+    const boxGeometry = new THREE.BoxGeometry(
+      element.scale.x, // largeur
+      element.scale.y * 1000, // hauteur (très agrandie pour être visible)
+      element.scale.z  // profondeur
+    );
     
-    // Créer une géométrie de boîte avec les dimensions attendues
-    const boxGeometry = new THREE.BoxGeometry(expectedLength, expectedHeight * 100, expectedWidth);
     const boxMaterial = new THREE.MeshBasicMaterial({ 
       color: 0xff0000, // Rouge
       wireframe: true,
@@ -119,22 +119,17 @@ export class RoadManager {
     });
     
     const debugBox = new THREE.Mesh(boxGeometry, boxMaterial);
-    debugBox.position.set(0, expectedHeight * 50, 0); // Centrer verticalement
+    debugBox.position.set(0, element.scale.y * 500, 0); // Centrer verticalement (plus haut)
     
-    // Appliquer la même rotation que la route
-    debugBox.rotation.set(
-      -Math.PI / 2, // Rotation fixe sur X négative pour coucher
-      0, // Pas de rotation sur Y
-      element.metadata?.orientation === 'vertical' ? Math.PI / 2 : 0 // Rotation Z pour les routes verticales
-    );
+    // Pas de rotation - la boîte utilise les mêmes dimensions que la route
+    debugBox.rotation.set(0, 0, 0);
     
     roadInstance.add(debugBox);
     
     console.log("🔍 Debug box ajoutée:", {
-      expectedLength,
-      expectedWidth,
-      expectedHeight,
-      orientation: element.metadata?.orientation
+      dimensions: element.scale,
+      orientation: element.metadata?.orientation,
+      position: element.position
     });
   }
 
