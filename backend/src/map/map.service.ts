@@ -136,13 +136,13 @@ export class MapService {
     roadWidth: number,
     roadHeight: number,
   ): void {
-    // Route horizontale centrale (axe X)
+    // Route horizontale centrale (axe X) - segments connectés
     const horizontalSegments = 10; // 10 segments pour couvrir ~200 unités
     for (let i = 0; i < horizontalSegments; i++) {
-      const x = (i - horizontalSegments / 2) * roadLength;
+      const x = (i - horizontalSegments / 2) * roadLength * 0.8; // Réduire l'espacement pour connecter
       elements.push({
         type: 'road',
-        position: { x: x, y: 0.1, z: 0 },
+        position: { x: x, y: 0.1 + i * 0.005, z: 0 },
         rotation: { x: 0, y: 0, z: 0 },
         scale: { x: roadLength, y: roadHeight, z: roadWidth },
         color: '#404040',
@@ -176,11 +176,11 @@ export class MapService {
     // Route verticale centrale (axe Z)
     const verticalSegments = 10; // 10 segments pour couvrir ~200 unités
     for (let i = 0; i < verticalSegments; i++) {
-      const z = (i - verticalSegments / 2) * roadLength;
+      const z = (i - verticalSegments / 2) * roadLength * 0.8; // Réduire l'espacement pour connecter
       elements.push({
         type: 'road',
-        position: { x: 0, y: 0.15, z: z }, // Légèrement plus haut que les routes horizontales
-        rotation: { x: 0, y: Math.PI / 2, z: 0 },
+        position: { x: 0, y: 0.1 + i * 0.005, z: z }, // Légèrement plus haut que les routes horizontales
+        rotation: { x: 0, y: 0, z: 0 },
         scale: { x: roadWidth, y: roadHeight, z: roadLength },
         color: '#404040',
         metadata: {
@@ -233,7 +233,7 @@ export class MapService {
         const x = (i - segments / 2) * roadLength;
         elements.push({
           type: 'road',
-          position: { x: x, y: 0.05, z: offset }, // Légèrement plus bas pour éviter le z-fighting
+          position: { x: x, y: 0.05 + i * 0.005, z: offset }, // Légèrement plus bas pour éviter le z-fighting
           rotation: { x: 0, y: 0, z: 0 },
           scale: { x: roadLength, y: roadHeight, z: roadWidth },
           color: '#505050', // Gris légèrement plus clair
@@ -259,8 +259,8 @@ export class MapService {
         const z = (i - segments / 2) * roadLength;
         elements.push({
           type: 'road',
-          position: { x: offset, y: 0.05, z: z }, // Légèrement plus bas pour éviter le z-fighting
-          rotation: { x: 0, y: Math.PI / 2, z: 0 },
+          position: { x: offset, y: 0.05 + i * 0.005, z: z }, // Légèrement plus bas pour éviter le z-fighting
+          rotation: { x: 0, y: 0, z: 0 },
           scale: { x: roadWidth, y: roadHeight, z: roadLength },
           color: '#505050', // Gris légèrement plus clair
           metadata: {

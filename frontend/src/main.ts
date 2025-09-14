@@ -87,6 +87,11 @@ class Main {
             this.world.showRoadPositions();
         });
         
+        // Configurer le mode godmode
+        this.inputManager.setGodmodeCallback(() => {
+            this.player.toggleGodmode();
+        });
+        
         // Exposer la méthode de test des routes dans la console
         (window as any).testRoads = () => {
             this.world.testRoadCreation();

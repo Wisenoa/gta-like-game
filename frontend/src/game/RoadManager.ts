@@ -27,14 +27,9 @@ export class RoadManager {
     console.log("📏 Échelle de l'élément:", element.scale);
     console.log("🔄 Rotation de l'élément:", element.rotation);
     
-    // Utilisons le modèle GLB avec fallback vers les routes simples
-    console.log("🔄 Utilisation du modèle GLB avec fallback");
-    try {
-      return await this.createGLBRoad(element);
-    } catch (error) {
-      console.error("❌ Erreur avec le modèle GLB, utilisation de la route simple:", error);
-      return this.createSimpleRoad(element);
-    }
+    // Utilisons directement les routes simples avec les rotations du serveur
+    console.log("🔄 Utilisation des routes simples avec rotations serveur");
+    return this.createSimpleRoad(element);
   }
 
   private getRoadModelPath(element: MapElement): string {
@@ -108,8 +103,44 @@ export class RoadManager {
     }
   }
 
+  private addDebugBoundingBox(element: MapElement, roadInstance: THREE.Group): void {
+    // Créer une boîte de debug avec les dimensions du serveur
+    const expectedLength = element.scale.x; // 18.95
+    const expectedWidth = element.scale.z;  // 12.98
+    const expectedHeight = element.scale.y; // 0.03
+    
+    // Créer une géométrie de boîte avec les dimensions attendues
+    const boxGeometry = new THREE.BoxGeometry(expectedLength, expectedHeight * 100, expectedWidth);
+    const boxMaterial = new THREE.MeshBasicMaterial({ 
+      color: 0xff0000, // Rouge
+      wireframe: true,
+      transparent: true,
+      opacity: 0.3
+    });
+    
+    const debugBox = new THREE.Mesh(boxGeometry, boxMaterial);
+    debugBox.position.set(0, expectedHeight * 50, 0); // Centrer verticalement
+    
+    // Appliquer la même rotation que la route
+    debugBox.rotation.set(
+      -Math.PI / 2, // Rotation fixe sur X négative pour coucher
+      0, // Pas de rotation sur Y
+      element.metadata?.orientation === 'vertical' ? Math.PI / 2 : 0 // Rotation Z pour les routes verticales
+    );
+    
+    roadInstance.add(debugBox);
+    
+    console.log("🔍 Debug box ajoutée:", {
+      expectedLength,
+      expectedWidth,
+      expectedHeight,
+      orientation: element.metadata?.orientation
+    });
+  }
+
   private async createGLBRoad(element: MapElement): Promise<THREE.Group> {
-    console.log("✅ Modèle GLB chargé, création de la route 3D");
+    console.log("✅ Utilisation de la route simple au lieu du modèle GLB");
+    return this.createSimpleRoad(element);
     
     const model = await this.modelManager.loadModel("/models/low_road.glb");
     if (!model) {
@@ -155,9 +186,9 @@ export class RoadManager {
     // roadInstance.position.set(-modelCenter.x, -modelCenter.y, -modelCenter.z);
     
     // Appliquer la rotation pour coucher + orientation selon le type de route
-    const isHozitontalRoad = element.metadata?.orientation === 'horizontal';
-    console.log('element.metadata :>> ', element.metadata, 'isHozitontalRoad :>> ', isHozitontalRoad);
-    const zRotation = isHozitontalRoad ? Math.PI / 2 : 0;
+    const isVerticalRoad = element.metadata?.orientation === 'vertical';
+    console.log('element.metadata :>> ', element.metadata, 'isVerticalRoad :>> ', isVerticalRoad);
+    const zRotation = isVerticalRoad ? Math.PI / 2 : 0;
     
     roadInstance.rotation.set(
       -Math.PI / 2, // Rotation fixe sur X négative pour coucher
@@ -184,8 +215,10 @@ export class RoadManager {
       scaleZ: scaleZ.toFixed(2)
     });
     
-    // Utiliser l'échelle normale du serveur
-    roadInstance.scale.set(modelSize.x * 0.3, 9.90, modelSize.z * 0.3);
+    // Utiliser l'échelle pour correspondre aux dimensions du serveur
+    const finalScaleX = expectedLength / modelSize.x;
+    const finalScaleZ = expectedWidth / modelSize.z;
+    roadInstance.scale.set(finalScaleX, 1, finalScaleZ);
     
     // Positionner la route
     roadInstance.position.set(
@@ -193,6 +226,9 @@ export class RoadManager {
       element.position.y,
       element.position.z
     );
+    
+    // Ajouter une boîte de debug pour vérifier les proportions
+    this.addDebugBoundingBox(element, roadInstance);
     
     // Créer un groupe pour la route
     const roadGroup = new THREE.Group();
@@ -230,11 +266,11 @@ export class RoadManager {
     console.log("📏 Échelle de l'élément:", element.scale);
     console.log("🔄 Rotation de l'élément:", element.rotation);
     
-    // Créer une route simple avec des dimensions temporaires pour debug
+    // Créer la géométrie directement avec les dimensions du serveur
     const geometry = new THREE.BoxGeometry(
-      element.scale.x, // 18.9
-      element.scale.y, // 0.03
-      element.scale.z  // 13.0
+      element.scale.x, // largeur
+      element.scale.y, // hauteur  
+      element.scale.z  // profondeur
     );
     
     const material = new THREE.MeshLambertMaterial({
@@ -250,16 +286,20 @@ export class RoadManager {
       element.position.z
     );
     
-    // Appliquer la rotation
-    mesh.rotation.set(
-      element.rotation.x,
-      element.rotation.y,
-      element.rotation.z
-    );
+    // Appliquer les rotations correctes pour Three.js BoxGeometry
+    console.log('🔍 Rotations du serveur:', element.rotation);
+    console.log('🔍 Orientation metadata:', element.metadata?.orientation);
+    console.log('🔍 Valeurs exactes - x:', element.rotation.x, 'y:', element.rotation.y, 'z:', element.rotation.z);
+    
+    // Pas de rotation nécessaire - la géométrie est créée avec les bonnes dimensions
+    console.log('✅ Géométrie créée avec les bonnes dimensions selon l\'orientation');
     
     // Créer un groupe pour la route
     const roadGroup = new THREE.Group();
     roadGroup.add(mesh);
+    
+    // Ajouter une boîte de debug pour vérifier les dimensions
+    this.addDebugBoundingBox(element, roadGroup);
     
     // Ajouter des propriétés pour le debug
     roadGroup.userData = {

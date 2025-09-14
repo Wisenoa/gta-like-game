@@ -28,6 +28,10 @@ export class Player {
     isSprinting: boolean;
     isWalking: boolean;
     isMoving: boolean;
+    
+    // Mode godmode
+    isGodmode: boolean;
+    godmodeSpeed: number;
     speed: number;
     
     // Physique
@@ -97,6 +101,10 @@ export class Player {
         this.isMoving = false;
         this.speed = 0;
         
+        // Mode godmode
+        this.isGodmode = false;
+        this.godmodeSpeed = 15.0;
+        
         // Physique réaliste
         this.acceleration = 15;
         this.friction = 8;
@@ -159,7 +167,14 @@ export class Player {
         }
         
         this.handleInput(deltaTime);
-        this.updatePhysics(deltaTime);
+        
+        // En mode godmode, utiliser une physique différente
+        if (this.isGodmode) {
+            this.updateGodmodePhysics(deltaTime);
+        } else {
+            this.updatePhysics(deltaTime);
+        }
+        
         this.updateHealth(deltaTime); // Mettre à jour la santé
         this.updateCamera();
     }
@@ -482,5 +497,56 @@ export class Player {
     
     getHealthPercentage(): number {
         return (this.health / this.maxHealth) * 100;
+    }
+    
+    // Mode godmode
+    toggleGodmode() {
+        this.isGodmode = !this.isGodmode;
+        console.log(`🕊️ Mode godmode: ${this.isGodmode ? 'ACTIVÉ' : 'DÉSACTIVÉ'}`);
+        
+        if (this.isGodmode) {
+            // En mode godmode, désactiver la gravité et la physique normale
+            this.velocity.y = 0;
+            this.isGrounded = true;
+        }
+    }
+    
+    updateGodmodePhysics(deltaTime) {
+        // En mode godmode, mouvement libre sans gravité
+        const moveVector = new THREE.Vector3();
+        
+        // Mouvement horizontal (WASD)
+        if (this.inputManager.isKeyPressed('KeyW')) moveVector.z -= 1;
+        if (this.inputManager.isKeyPressed('KeyS')) moveVector.z += 1;
+        if (this.inputManager.isKeyPressed('KeyA')) moveVector.x -= 1;
+        if (this.inputManager.isKeyPressed('KeyD')) moveVector.x += 1;
+        
+        // Mouvement vertical (Space/Ctrl)
+        if (this.inputManager.isKeyPressed('Space')) moveVector.y += 1;
+        if (this.inputManager.isKeyPressed('ControlLeft') || this.inputManager.isKeyPressed('ControlRight')) moveVector.y -= 1;
+        
+        // Normaliser et appliquer la vitesse
+        if (moveVector.length() > 0) {
+            moveVector.normalize();
+            
+            // Appliquer la rotation de la caméra au mouvement
+            const cameraDirection = new THREE.Vector3();
+            this.camera?.getWorldDirection(cameraDirection);
+            
+            // Créer un vecteur de mouvement basé sur la direction de la caméra
+            const forward = new THREE.Vector3(cameraDirection.x, 0, cameraDirection.z).normalize();
+            const right = new THREE.Vector3().crossVectors(forward, new THREE.Vector3(0, 1, 0)).normalize();
+            
+            const finalMove = new THREE.Vector3();
+            finalMove.addScaledVector(forward, -moveVector.z);
+            finalMove.addScaledVector(right, moveVector.x);
+            finalMove.y = moveVector.y; // Mouvement vertical direct
+            
+            // Appliquer le mouvement
+            this.position.addScaledVector(finalMove, this.godmodeSpeed * deltaTime);
+        }
+        
+        // Mettre à jour la position du groupe
+        this.group.position.copy(this.position);
     }
 }

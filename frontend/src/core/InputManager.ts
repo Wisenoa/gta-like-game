@@ -19,6 +19,9 @@ export class InputManager {
         // Callback pour afficher les positions des routes
         this.roadPositionsCallback = null;
         
+        // Callback pour le mode godmode
+        this.godmodeCallback = null;
+        
         this.setupEventListeners();
     }
     
@@ -40,6 +43,14 @@ export class InputManager {
                 event.preventDefault();
                 if (this.roadPositionsCallback) {
                     this.roadPositionsCallback();
+                }
+            }
+            
+            // Gestion de la touche pour le mode godmode (G)
+            if (event.code === 'KeyG') {
+                event.preventDefault();
+                if (this.godmodeCallback) {
+                    this.godmodeCallback();
                 }
             }
             
@@ -132,5 +143,9 @@ export class InputManager {
     
     setRoadPositionsCallback(callback) {
         this.roadPositionsCallback = callback;
+    }
+    
+    setGodmodeCallback(callback) {
+        this.godmodeCallback = callback;
     }
 }
