@@ -118,8 +118,8 @@ export class Player {
         // Mouvement simple (pas de friction complexe)
         this.moveSpeed = 12.0; // Vitesse encore plus rapide
         this.sprintSpeed = 18.0; // Vitesse de sprint (50% plus rapide)
-        this.jumpSpeed = 7.0; // Force de saut (comme Minecraft)
-        this.gravity = -20.0; // Gravité simple
+        this.jumpSpeed = 12.0; // Force de saut pour atteindre 1.2 bloc de haut
+        this.gravity = -120.0; // Gravité ultra forte pour un mouvement instantané
         
         // Système de sprint et stamina
         this.stamina = 100; // Stamina actuelle
@@ -226,7 +226,7 @@ export class Player {
             this.velocity.z = 0;
         }
         
-        // Appliquer le saut
+        // Appliquer le saut simple
         if (movementInput.jump && this.isGrounded) {
             this.velocity.y = this.jumpSpeed;
             this.isGrounded = false;
@@ -281,6 +281,9 @@ export class Player {
             // En godmode, pas de gravité
             this.position.addScaledVector(this.velocity, deltaTime);
         } else {
+            // Vérifier si on est au sol au début
+            this.checkGrounded();
+            
             // Appliquer la gravité
             this.velocity.y += this.gravity * deltaTime;
             
@@ -345,6 +348,30 @@ export class Player {
         }
         
         return false; // Pas de collision
+    }
+    
+    // Vérifier si le joueur est au sol
+    checkGrounded() {
+        if (!this.blockManager) {
+            // Fallback : considérer qu'on est au sol si Y <= 0
+            this.isGrounded = this.position.y <= 0;
+            return;
+        }
+        
+        // Vérifier s'il y a un bloc sous les pieds
+        const feetY = this.position.y - 0.1; // Légèrement sous les pieds
+        const blockUnderFeet = this.blockManager.getBlockAt(
+            this.position.x, 
+            feetY, 
+            this.position.z
+        );
+        
+        // Si il y a un bloc sous les pieds et qu'on ne tombe pas, on est au sol
+        if (blockUnderFeet && blockUnderFeet !== 'air' && this.velocity.y <= 0) {
+            this.isGrounded = true;
+        } else {
+            this.isGrounded = false;
+        }
     }
     
     
